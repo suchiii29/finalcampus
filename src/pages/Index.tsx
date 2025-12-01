@@ -10,21 +10,21 @@ const Index = () => {
       title: 'Student Portal',
       description: 'Book rides, track buses, and manage your commute',
       icon: User,
-      path: '/student/dashboard',
+      path: '/student/login',   // 🔥 FIXED
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     },
     {
       title: 'Driver Portal',
       description: 'Manage rides, update location, and view assignments',
       icon: UserCog,
-      path: '/driver/dashboard',
+      path: '/driver/login',    // 🔥 FIXED
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     },
     {
       title: 'Admin Portal',
       description: 'Manage fleet, assign drivers, and view analytics',
       icon: Bus,
-      path: '/admin/dashboard',
+      path: '/admin/login',     // 🔥 FIXED
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     },
     {
@@ -35,6 +35,7 @@ const Index = () => {
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     }
   ];
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-accent/5">
@@ -65,7 +66,7 @@ const Index = () => {
           {portals.map((portal, index) => {
             const Icon = portal.icon;
             return (
-              <Card 
+              <Card
                 key={portal.path}
                 className="p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-8"
                 style={{ animationDelay: `${index * 100}ms` }}
@@ -104,7 +105,7 @@ const Index = () => {
               { title: 'Smart Routing', desc: 'AI-powered route optimization' },
               { title: 'Demand Predictions', desc: 'Forecast peak hours and zones' }
             ].map((feature, index) => (
-              <div 
+              <div
                 key={feature.title}
                 className="p-6 rounded-xl bg-card/50 backdrop-blur animate-in fade-in slide-in-from-bottom-8"
                 style={{ animationDelay: `${(index + 4) * 100}ms` }}

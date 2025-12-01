@@ -1,3 +1,4 @@
+// src/pages/admin/Dashboard.tsx
 import { useState } from 'react';
 import Layout from '@/components/Layout';
 import StatCard from '@/components/StatCard';
@@ -12,11 +13,45 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { assignRide } from '../../firebase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminDashboard() {
+  const { toast } = useToast();
   const [selectedRide, setSelectedRide] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
+
+  // pending rides and vehicles still come from mock data UI-wise (you asked not to change UI)
   const pendingRides = mockRides.filter(r => r.status === 'pending');
   const activeVehicles = mockVehicles.filter(v => v.status === 'active');
+
+  const handleAssign = async (rideId: string, vehicle: any) => {
+    try {
+      setAssigning(true);
+      // vehicle is expected to have fields: id (driver id), driverName, vehicleNumber, driverPhone?
+      await assignRide(rideId, {
+        driverId: vehicle.id,
+        driverName: vehicle.driverName,
+        vehicleNumber: vehicle.vehicleNumber,
+        driverPhone: vehicle.driverPhone || null,
+      });
+
+      toast({
+        title: 'Assigned',
+        description: `Ride assigned to ${vehicle.driverName}`,
+      });
+      setSelectedRide(null);
+    } catch (error: any) {
+      console.error('Assign failed:', error);
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to assign ride',
+        variant: 'destructive'
+      });
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   return (
     <Layout role="admin">
@@ -102,10 +137,12 @@ export default function AdminDashboard() {
                             Select a driver for this ride request
                           </p>
                           <div className="space-y-2">
-                            {mockVehicles.filter(v => v.status === 'active').map((vehicle) => (
+                            {activeVehicles.map((vehicle) => (
                               <button
                                 key={vehicle.id}
                                 className="w-full p-4 border rounded-lg hover:bg-muted/50 text-left transition-colors"
+                                onClick={() => handleAssign(ride.id, vehicle)}
+                                disabled={assigning}
                               >
                                 <p className="font-medium">{vehicle.driverName}</p>
                                 <p className="text-sm text-muted-foreground">
@@ -113,6 +150,10 @@ export default function AdminDashboard() {
                                 </p>
                               </button>
                             ))}
+
+                            {activeVehicles.length === 0 && (
+                              <p className="text-sm text-muted-foreground">No active drivers available</p>
+                            )}
                           </div>
                         </div>
                       </DialogContent>
