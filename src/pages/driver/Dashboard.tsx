@@ -6,44 +6,40 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MapPin, Clock, CheckCircle, XCircle, Users, Route } from "lucide-react";
 
-// IMPORTANT: import MapContainer + TileLayer + Marker from react-leaflet
-import { MapContainer, TileLayer, Marker } from "react-leaflet";
-import L from "leaflet";
-
 import {
   getDriverRides,
   updateRideStatus,
   startRide,
   getUserProfile,
 } from "../../firebase";
-import { auth } from "../../firebase";
+import { auth, db } from "../../firebase";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
-/* Fix Leaflet default icons if not done globally already.
-   If you already fix icons in one place (e.g. Location.tsx), you can remove this block.
-*/
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-});
+interface RouteAssignment {
+  id: string;
+  routeName: string;
+  startPoint: string;
+  endPoint: string;
+  stops: string[];
+  assignedDriverId: string;
+  assignedDriverName: string;
+  vehicleNumber: string;
+  status: 'active' | 'inactive';
+  createdAt: any;
+}
 
 export default function DriverDashboard() {
   const [currentRide, setCurrentRide] = useState<any | null>(null);
   const [allRides, setAllRides] = useState<any[]>([]);
-  const [assignedRoutes, setAssignedRoutes] = useState<any[]>([]);
+  const [assignedRoutes, setAssignedRoutes] = useState<RouteAssignment[]>([]);
   const [driver, setDriver] = useState<any>({
     driverName: "Driver",
     vehicleNumber: "CAM-001",
     currentPassengers: 0,
     capacity: 40,
-    location: { lat: 12.9716, lng: 77.5946 }, // default center
   });
 
   const navigate = useNavigate();
@@ -69,12 +65,6 @@ export default function DriverDashboard() {
         const rides = await getDriverRides(user.uid);
         setAllRides(rides);
 
-        // Filter for assigned routes (status: 'accepted' or 'pending' assigned to this driver)
-        const routes = rides.filter((r: any) => 
-          r.status === "accepted" || r.status === "pending"
-        );
-        setAssignedRoutes(routes);
-
         const active =
           rides.find((r: any) => r.status === "in-progress") ||
           rides.find((r: any) => r.status === "accepted") ||
@@ -82,16 +72,24 @@ export default function DriverDashboard() {
 
         setCurrentRide(active);
 
-        // if ride has driverLocation saved, use it for map center
-        if (active?.driverLocation && typeof active.driverLocation.lat === "number") {
-          setDriver((prev: any) => ({
-            ...prev,
-            location: {
-              lat: active.driverLocation.lat,
-              lng: active.driverLocation.lng,
-            },
-          }));
-        }
+        // Subscribe to routes assigned to this driver
+        const routesQuery = query(
+          collection(db, 'routes'),
+          where('assignedDriverId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+
+        const unsubRoutes = onSnapshot(routesQuery, (snapshot) => {
+          const routesData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as RouteAssignment[];
+          setAssignedRoutes(routesData);
+        });
+
+        return () => {
+          unsubRoutes();
+        };
       } catch (e) {
         console.error("Error loading driver data", e);
       }
@@ -102,6 +100,8 @@ export default function DriverDashboard() {
   }, []);
 
   const todaysCompleted = allRides.filter((r) => r.status === "completed").length;
+  const activeRoutes = assignedRoutes.filter(r => r.status === 'active');
+  const inactiveRoutes = assignedRoutes.filter(r => r.status === 'inactive');
 
   const handleStartRide = async () => {
     if (!currentRide) {
@@ -156,10 +156,10 @@ export default function DriverDashboard() {
             variant="primary"
           />
           <StatCard
-            title="Next Stop"
-            value="8 mins"
-            description="Engineering Block"
-            icon={Clock}
+            title="Assigned Routes"
+            value={activeRoutes.length}
+            description={`${assignedRoutes.length} total routes`}
+            icon={Route}
             variant="warning"
           />
         </div>
@@ -198,8 +198,7 @@ export default function DriverDashboard() {
                   <p className="text-sm text-muted-foreground">Request Time</p>
                   <p className="font-medium">
                     {currentRide.requestTime
-                      ? // firestore Timestamp or JS Date
-                        new Date(
+                      ? new Date(
                           currentRide.requestTime?.seconds
                             ? currentRide.requestTime.toDate()
                             : currentRide.requestTime
@@ -232,59 +231,88 @@ export default function DriverDashboard() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Route className="h-5 w-5 text-primary" />
-            <h3 className="text-xl font-bold">Assigned Routes</h3>
+            <h3 className="text-xl font-bold">Your Assigned Routes</h3>
           </div>
           
           {assignedRoutes.length > 0 ? (
-            <div className="space-y-3">
-              {assignedRoutes.map((route) => (
-                <Card key={route.id} className="p-4 bg-muted/50">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">
-                          {route.studentName || "Student"}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          route.status === "accepted" 
-                            ? "bg-blue-100 text-blue-700" 
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}>
-                          {route.status}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-primary" />
-                          <span className="text-muted-foreground">
-                            {route.pickup}
-                          </span>
+            <div className="space-y-4">
+              {/* Active Routes */}
+              {activeRoutes.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm text-green-700 mb-2">Active Routes</h4>
+                  <div className="space-y-3">
+                    {activeRoutes.map((route) => (
+                      <Card key={route.id} className="p-4 bg-green-50 border-green-200">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-lg">{route.routeName}</span>
+                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+                              Active
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-sm">
+                            <MapPin className="h-4 w-4 text-primary" />
+                            <span className="font-medium">{route.startPoint}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <MapPin className="h-4 w-4 text-accent" />
+                            <span className="font-medium">{route.endPoint}</span>
+                          </div>
+                          
+                          {route.stops && route.stops.length > 0 && (
+                            <div className="mt-2 p-2 bg-white rounded border">
+                              <p className="text-xs font-semibold mb-1">Stops:</p>
+                              <ul className="text-xs text-muted-foreground space-y-1">
+                                {route.stops.map((stop, idx) => (
+                                  <li key={idx} className="flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
+                                      {idx + 1}
+                                    </span>
+                                    {stop}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          <div className="text-xs text-muted-foreground pt-2 border-t">
+                            Vehicle: {route.vehicleNumber}
+                          </div>
                         </div>
-                        
-                        <span className="text-muted-foreground">→</span>
-                        
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-accent" />
-                          <span className="text-muted-foreground">
-                            {route.destination}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {route.requestTime && (
-                        <p className="text-xs text-muted-foreground">
-                          Requested: {new Date(
-                            route.requestTime?.seconds
-                              ? route.requestTime.toDate()
-                              : route.requestTime
-                          ).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
+                      </Card>
+                    ))}
                   </div>
-                </Card>
-              ))}
+                </div>
+              )}
+
+              {/* Inactive Routes */}
+              {inactiveRoutes.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm text-gray-700 mb-2">Inactive Routes</h4>
+                  <div className="space-y-3">
+                    {inactiveRoutes.map((route) => (
+                      <Card key={route.id} className="p-4 bg-gray-50 border-gray-200 opacity-75">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold">{route.routeName}</span>
+                            <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700">
+                              Inactive
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-sm">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>{route.startPoint}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>{route.endPoint}</span>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
@@ -292,21 +320,6 @@ export default function DriverDashboard() {
               <p>No routes assigned by admin yet</p>
             </div>
           )}
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="text-lg font-bold mb-4">Current Route</h3>
-          <div className="h-[400px] rounded-lg overflow-hidden">
-            {/* This MapContainer is now imported above and will render */}
-            <MapContainer
-              center={[driver.location.lat, driver.location.lng]}
-              zoom={13}
-              style={{ height: "100%", width: "100%" }}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Marker position={[driver.location.lat, driver.location.lng]} />
-            </MapContainer>
-          </div>
         </Card>
       </div>
     </Layout>

@@ -20,8 +20,16 @@ export default function ProtectedRoute({ children, requiredRole }: any) {
         console.log("ProtectedRoute check - User role:", role, "Required:", requiredRole);
         setUserRole(role);
         
-        // Case-insensitive comparison
-        const isAllowed = role?.toUpperCase() === requiredRole?.toUpperCase();
+        // ✅ UPDATED: Handle both single role and array of roles
+        let isAllowed = false;
+        if (Array.isArray(requiredRole)) {
+          // Check if user's role is in the array of allowed roles
+          isAllowed = requiredRole.some(r => r?.toUpperCase() === role?.toUpperCase());
+        } else {
+          // Single role comparison (original behavior)
+          isAllowed = role?.toUpperCase() === requiredRole?.toUpperCase();
+        }
+        
         setAllowed(isAllowed);
       } catch (error) {
         console.error("Error getting user role:", error);
@@ -47,9 +55,12 @@ export default function ProtectedRoute({ children, requiredRole }: any) {
 
   // Not authenticated - redirect to appropriate login
   if (!allowed && !auth.currentUser) {
-    if (requiredRole?.toUpperCase() === "ADMIN") {
+    // ✅ UPDATED: Handle array of required roles for redirect
+    const roleToCheck = Array.isArray(requiredRole) ? requiredRole[0] : requiredRole;
+    
+    if (roleToCheck?.toUpperCase() === "ADMIN") {
       return <Navigate to="/admin/login" replace />;
-    } else if (requiredRole?.toUpperCase() === "DRIVER") {
+    } else if (roleToCheck?.toUpperCase() === "DRIVER") {
       return <Navigate to="/driver/login" replace />;
     } else {
       return <Navigate to="/student/login" replace />;
@@ -59,15 +70,13 @@ export default function ProtectedRoute({ children, requiredRole }: any) {
   // Authenticated but wrong role - redirect to their correct dashboard
   if (!allowed && auth.currentUser && userRole) {
     console.log("Wrong role detected. User has:", userRole, "but needs:", requiredRole);
-    
     if (userRole.toUpperCase() === "ADMIN") {
       return <Navigate to="/admin/dashboard" replace />;
     } else if (userRole.toUpperCase() === "DRIVER") {
       return <Navigate to="/driver/dashboard" replace />;
-    } else if (userRole.toUpperCase() === "STUDENT") {
+    } else if (userRole.toUpperCase() === "STUDENT" || userRole.toUpperCase() === "TEACHER") {
       return <Navigate to="/student/dashboard" replace />;
     }
-    
     // If role is unknown, redirect to home
     return <Navigate to="/" replace />;
   }

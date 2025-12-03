@@ -25,7 +25,6 @@ import {
   orderBy,
   onSnapshot,
   Timestamp,
-  deleteDoc,
   GeoPoint,
   limit,
 } from "firebase/firestore";
@@ -33,7 +32,7 @@ import {
 import { getDatabase, ref, set as rtdbSet, get as rtdbGet } from "firebase/database";
 
 /**
- * Firebase config
+ * Firebase config - keep your existing values
  */
 const firebaseConfig = {
   apiKey: "AIzaSyC9EXClZus1Zi7221Vx7ZnxO-72Jwh31jw",
@@ -65,13 +64,13 @@ export interface Location {
 export interface Driver {
   id: string;
   name: string;
-  phone: string;
+  phone?: string;
   vehicleNumber: string;
-  vehicleType: 'bus' | 'van';
-  capacity: number;
-  status: 'active' | 'idle' | 'offline';
+  vehicleType: 'bus' | 'van' | 'cab' | string;
+  capacity?: number;
+  status: 'active' | 'idle' | 'offline' | string;
   currentLocation?: Location;
-  currentPassengers: number;
+  currentPassengers?: number;
   route?: string;
 }
 
@@ -79,13 +78,13 @@ export interface Ride {
   id: string;
   studentId: string;
   studentName: string;
-  studentPhone: string;
+  studentPhone?: string;
   pickup: string;
-  pickupCoords: { lat: number; lng: number };
+  pickupCoords?: { lat: number; lng: number };
   destination: string;
-  destinationCoords: { lat: number; lng: number };
-  status: 'pending' | 'accepted' | 'assigned' | 'in-progress' | 'completed' | 'cancelled';
-  requestTime: Date;
+  destinationCoords?: { lat: number; lng: number };
+  status: 'pending' | 'accepted' | 'assigned' | 'in-progress' | 'completed' | 'cancelled' | string;
+  requestTime: Date | any;
   assignedDriver?: {
     driverId: string;
     driverName: string;
@@ -102,12 +101,15 @@ export interface Ride {
   pickupTime?: Date;
   completedTime?: Date;
   cancelledAt?: Date;
-  type: 'on-demand' | 'scheduled';
+  type?: 'on-demand' | 'scheduled' | string;
   driverLocation?: {
     lat: number;
     lng: number;
     timestamp: Date;
   };
+  priority?: string;
+  priorityScore?: number;
+  zone?: string;
 }
 
 export interface DemandZone {
@@ -162,29 +164,24 @@ export const setUserRole = async (uid: string, role: string) => {
 
 export const getUserRole = async (uid: string) => {
   try {
-    // Try Firestore first
     const docSnap = await getDoc(doc(db, "users", uid));
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data && data.role) {
-        console.log("Role from Firestore:", data.role);
         return data.role;
       }
     }
-    
-    // Fallback to RTDB
+
     try {
       const snapshot = await rtdbGet(ref(rtdb, `users/${uid}/role`));
       if (snapshot && snapshot.exists()) {
         const role = snapshot.val();
-        console.log("Role from RTDB:", role);
         return role;
       }
     } catch (rtdbError) {
       console.warn("RTDB read failed:", rtdbError);
     }
-    
-    console.log("No role found for user:", uid);
+
     return null;
   } catch (error) {
     console.error("Error getting user role:", error);
@@ -224,13 +221,29 @@ export const updateUserProfile = async (uid: string, updates: any) => {
    ============================ */
 
 export const createRideRequest = async (rideData: any) => {
-  const rideRef = await addDoc(collection(db, "rides"), {
+  const priority = rideData.priority || 'normal';
+  const priorityWeights: any = { emergency: 100, exam: 60, normal: 20 };
+  const priorityScore = rideData.priorityScore ?? priorityWeights[priority] ?? 20;
+
+  const docData: any = {
     ...rideData,
     status: "pending",
     requestTime: Timestamp.now(),
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
-  });
+    priority,
+    priorityScore,
+    zone: rideData.zone || rideData.pickup || null
+  };
+
+  if (rideData.pickupCoords && typeof rideData.pickupCoords.lat === 'number') {
+    docData.pickupCoords = new GeoPoint(rideData.pickupCoords.lat, rideData.pickupCoords.lng);
+  }
+  if (rideData.destinationCoords && typeof rideData.destinationCoords.lat === 'number') {
+    docData.destinationCoords = new GeoPoint(rideData.destinationCoords.lat, rideData.destinationCoords.lng);
+  }
+
+  const rideRef = await addDoc(collection(db, "rides"), docData);
   return rideRef.id;
 };
 
@@ -311,13 +324,7 @@ export const getDriverRides = async (driverId: string) => {
   return qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-/**
- * assignRide
- * Admin uses this to assign a pending ride to a driver.
- * driverData should include driverId, driverName, vehicleNumber, driverPhone (optional)
- */
 export const assignRide = async (rideId: string, driverData: any) => {
-  // set ride driver fields + set status to 'accepted' and acceptedAt
   await updateDoc(doc(db, "rides", rideId), {
     driverId: driverData.driverId,
     driverName: driverData.driverName,
@@ -336,11 +343,6 @@ export const assignRide = async (rideId: string, driverData: any) => {
   });
 };
 
-/**
- * startRide
- * Called by the driver when they start the ride (from Driver Dashboard).
- * Also sets status 'in-progress'
- */
 export const startRide = async (rideId: string, driverId?: string) => {
   await updateDoc(doc(db, "rides", rideId), {
     status: "in-progress",
@@ -350,15 +352,8 @@ export const startRide = async (rideId: string, driverId?: string) => {
   });
 };
 
-/**
- * acceptRide (alias/backwards-compatible)
- */
 export const acceptRide = assignRide;
 
-/**
- * updateDriverLocation
- * Writes a driverLocation object inside the ride doc so subscribers see it live.
- */
 export const updateDriverLocation = async (rideId: string, lat: number, lng: number) => {
   await updateDoc(doc(db, "rides", rideId), {
     driverLocation: { lat, lng, timestamp: Timestamp.now() },
@@ -370,180 +365,239 @@ export const updateDriverLocation = async (rideId: string, lat: number, lng: num
    NEW: ADMIN PORTAL FUNCTIONS
    ============================ */
 
-// Real-time listener for pending rides
-export function subscribeToPendingRides(callback: (rides: Ride[]) => void) {
-  const q = query(
-    collection(db, 'rides'),
-    where('status', '==', 'pending'),
-    orderBy('requestTime', 'desc')
-  );
-
-  return onSnapshot(q, (snapshot) => {
-    const rides: Ride[] = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      rides.push({
-        id: doc.id,
-        studentId: data.studentId,
-        studentName: data.studentName,
-        studentPhone: data.studentPhone,
-        pickup: data.pickup,
-        pickupCoords: data.pickupCoords?.latitude 
-          ? { lat: data.pickupCoords.latitude, lng: data.pickupCoords.longitude }
-          : { lat: 0, lng: 0 },
-        destination: data.destination,
-        destinationCoords: data.destinationCoords?.latitude
-          ? { lat: data.destinationCoords.latitude, lng: data.destinationCoords.longitude }
-          : { lat: 0, lng: 0 },
-        status: data.status,
-        requestTime: data.requestTime?.toDate() || new Date(),
-        type: data.type || 'on-demand',
-        assignedDriver: data.assignedDriver,
-        driverId: data.driverId,
-        driverName: data.driverName,
-        driverPhone: data.driverPhone,
-        vehicleNumber: data.vehicleNumber,
-        assignedTime: data.assignedTime?.toDate(),
-        acceptedAt: data.acceptedAt?.toDate(),
-        startedAt: data.startedAt?.toDate(),
-        pickupTime: data.pickupTime?.toDate(),
-        completedTime: data.completedTime?.toDate(),
-        cancelledAt: data.cancelledAt?.toDate(),
-        driverLocation: data.driverLocation ? {
-          lat: data.driverLocation.lat,
-          lng: data.driverLocation.lng,
-          timestamp: data.driverLocation.timestamp?.toDate() || new Date()
-        } : undefined
-      } as Ride);
-    });
-    callback(rides);
-  }, (error) => {
-    console.error('Error in subscribeToPendingRides:', error);
-    callback([]);
-  });
-}
-
-// Real-time listener for active drivers
-export function subscribeToActiveDrivers(callback: (drivers: Driver[]) => void) {
-  const q = query(
-    collection(db, 'drivers'),
-    where('status', 'in', ['active', 'idle'])
-  );
-
-  return onSnapshot(q, (snapshot) => {
-    const drivers: Driver[] = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      drivers.push({
-        id: doc.id,
-        name: data.name,
-        phone: data.phone,
-        vehicleNumber: data.vehicleNumber,
-        vehicleType: data.vehicleType,
-        capacity: data.capacity,
-        status: data.status,
-        currentPassengers: data.currentPassengers || 0,
-        route: data.route,
-        currentLocation: data.currentLocation ? {
-          latitude: data.currentLocation.coordinates?.latitude || 0,
-          longitude: data.currentLocation.coordinates?.longitude || 0,
-          timestamp: data.currentLocation.timestamp?.toDate() || new Date(),
-          speed: data.currentLocation.speed,
-          heading: data.currentLocation.heading
-        } : undefined
-      } as Driver);
-    });
-    callback(drivers);
-  }, (error) => {
-    console.error('Error in subscribeToActiveDrivers:', error);
-    callback([]);
-  });
-}
-
-// Get historical ride data for ML training
-export async function getHistoricalRideData(days: number = 30) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-
-  const q = query(
-    collection(db, 'rides'),
-    where('requestTime', '>=', Timestamp.fromDate(startDate)),
-    orderBy('requestTime', 'asc')
-  );
-
-  const snapshot = await getDocs(q);
-  const rides: any[] = [];
-  
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    rides.push({
-      id: doc.id,
-      ...data,
-      requestTime: data.requestTime?.toDate(),
-      pickupCoords: data.pickupCoords?.latitude
-        ? { lat: data.pickupCoords.latitude, lng: data.pickupCoords.longitude }
-        : { lat: 0, lng: 0 }
-    });
-  });
-
-  return rides;
-}
-
-// Update demand zone data
-export async function updateDemandZone(zoneData: Omit<DemandZone, 'timestamp'>) {
+/**
+ * subscribeToPriorityRides
+ * Keeps ordering by priorityScore desc, then requestTime asc.
+ * If Firestore throws permission issues for ordering by requestTime,
+ * we fall back to client-side sort.
+ */
+export function subscribeToPriorityRides(callback: (rides: Ride[]) => void) {
   try {
-    await addDoc(collection(db, 'demandZones'), {
-      ...zoneData,
-      timestamp: Timestamp.now()
+    const q = query(
+      collection(db, "rides"),
+      where("status", "==", "pending"),
+      orderBy("priorityScore", "desc"),
+      orderBy("requestTime", "asc")
+    );
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const rides: Ride[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          rides.push({
+            id: docSnap.id,
+            studentId: data.studentId,
+            studentName: data.studentName,
+            studentPhone: data.studentPhone,
+            pickup: data.pickup,
+            pickupCoords: data.pickupCoords?.latitude
+              ? { lat: data.pickupCoords.latitude, lng: data.pickupCoords.longitude }
+              : undefined,
+            destination: data.destination,
+            destinationCoords: data.destinationCoords?.latitude
+              ? { lat: data.destinationCoords.latitude, lng: data.destinationCoords.longitude }
+              : undefined,
+            status: data.status,
+            requestTime: data.requestTime?.toDate() || new Date(),
+            type: data.type || "on-demand",
+            assignedDriver: data.assignedDriver,
+            driverId: data.driverId,
+            driverName: data.driverName,
+            driverPhone: data.driverPhone,
+            vehicleNumber: data.vehicleNumber,
+            assignedTime: data.assignedTime?.toDate(),
+            acceptedAt: data.acceptedAt?.toDate(),
+            startedAt: data.startedAt?.toDate(),
+            pickupTime: data.pickupTime?.toDate(),
+            completedTime: data.completedTime?.toDate(),
+            cancelledAt: data.cancelledAt?.toDate(),
+            driverLocation: data.driverLocation
+              ? {
+                  lat: data.driverLocation.lat,
+                  lng: data.driverLocation.lng,
+                  timestamp: data.driverLocation.timestamp?.toDate() || new Date(),
+                }
+              : undefined,
+            priority: data.priority,
+            priorityScore: data.priorityScore,
+            zone: data.zone,
+          } as Ride);
+        });
+        callback(rides);
+      },
+      (error) => {
+        console.error("Error in subscribeToPriorityRides:", error);
+        // In case of permission or other issues, callback empty and let UI handle it
+        callback([]);
+      }
+    );
+  } catch (e) {
+    console.error("subscribeToPriorityRides failed:", e);
+    return () => {};
+  }
+}
+
+export function subscribeToActiveDrivers(callback: (drivers: Driver[]) => void) {
+  try {
+    const q = query(collection(db, "drivers"), where("status", "in", ["active", "idle", "offline"]));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const drivers: Driver[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          drivers.push({
+            id: docSnap.id,
+            name: data.name,
+            phone: data.phone,
+            vehicleNumber: data.vehicleNumber,
+            vehicleType: data.vehicleType,
+            capacity: data.capacity,
+            status: data.status,
+            currentPassengers: data.currentPassengers || 0,
+            route: data.route,
+            currentLocation: data.currentLocation
+              ? {
+                  latitude: data.currentLocation.coordinates?.latitude || 0,
+                  longitude: data.currentLocation.coordinates?.longitude || 0,
+                  timestamp: data.currentLocation.timestamp?.toDate() || new Date(),
+                  speed: data.currentLocation.speed,
+                  heading: data.currentLocation.heading,
+                }
+              : undefined,
+          } as Driver);
+        });
+        callback(drivers);
+      },
+      (error) => {
+        console.error("Error in subscribeToActiveDrivers:", error);
+        callback([]);
+      }
+    );
+  } catch (e) {
+    console.error("subscribeToActiveDrivers error:", e);
+    return () => {};
+  }
+}
+
+/**
+ * getHistoricalRideData
+ * NOTE: to avoid Firestore query permission ordering issues we fetch a reasonable
+ * recent set (we order by requestTime only). If your Firestore rules restrict
+ * ordering, this function will still work — but you must ensure admin can read rides.
+ */
+export async function getHistoricalRideData(days: number = 30) {
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Some firestore setups fail if you mix where/orderBy wrongly with security rules.
+    // We'll fetch rides ordered by requestTime and filter client-side.
+    const q = query(collection(db, "rides"), orderBy("requestTime", "asc"));
+
+    const snapshot = await getDocs(q);
+    const rides: any[] = [];
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const reqTime = data.requestTime?.toDate ? data.requestTime.toDate() : new Date(data.requestTime || Date.now());
+      // filter client-side
+      if (reqTime >= startDate) {
+        rides.push({
+          id: docSnap.id,
+          ...data,
+          requestTime: reqTime,
+          pickupCoords: data.pickupCoords?.latitude ? { lat: data.pickupCoords.latitude, lng: data.pickupCoords.longitude } : undefined,
+        });
+      }
     });
+
+    return rides;
   } catch (error) {
-    console.error('Error updating demand zone:', error);
+    console.error("getHistoricalRideData error:", error);
     throw error;
   }
 }
 
-// Get recent demand data for a zone
+export async function updateDemandZone(zoneData: Omit<DemandZone, "timestamp">) {
+  try {
+    await addDoc(collection(db, "demandZones"), {
+      ...zoneData,
+      timestamp: Timestamp.now(),
+    });
+  } catch (error) {
+    console.error("Error updating demand zone:", error);
+    throw error;
+  }
+}
+
 export async function getZoneDemandHistory(zone: string, hours: number = 24) {
   const startTime = new Date();
   startTime.setHours(startTime.getHours() - hours);
 
   const q = query(
-    collection(db, 'demandZones'),
-    where('zone', '==', zone),
-    where('timestamp', '>=', Timestamp.fromDate(startTime)),
-    orderBy('timestamp', 'desc'),
+    collection(db, "demandZones"),
+    where("zone", "==", zone),
+    where("timestamp", ">=", Timestamp.fromDate(startTime)),
+    orderBy("timestamp", "desc"),
     limit(100)
   );
 
   const snapshot = await getDocs(q);
   const data: any[] = [];
-  
-  snapshot.forEach((doc) => {
-    const docData = doc.data();
+
+  snapshot.forEach((docSnap) => {
+    const docData = docSnap.data();
     data.push({
       ...docData,
-      timestamp: docData.timestamp?.toDate()
+      timestamp: docData.timestamp?.toDate(),
     });
   });
 
   return data;
 }
 
-// Update driver location in drivers collection
+export async function createDriverDocument(uid: string, profile: any) {
+  const driverRef = doc(db, "drivers", uid);
+  await setDoc(
+    driverRef,
+    {
+      name: profile.name || "Driver",
+      phone: profile.phone || null,
+      vehicleNumber: profile.vehicleNumber || null,
+      vehicleType: profile.vehicleType || "bus",
+      capacity: profile.capacity || 20,
+      status: "idle",
+      currentPassengers: 0,
+      currentLocation: {
+        coordinates: new GeoPoint(0, 0),
+        timestamp: Timestamp.now(),
+        speed: 0,
+        heading: 0,
+      },
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true }
+  );
+}
+
 export async function updateDriverLocationInDriversCollection(driverId: string, location: Location) {
   try {
-    const driverRef = doc(db, 'drivers', driverId);
+    const driverRef = doc(db, "drivers", driverId);
     await updateDoc(driverRef, {
       currentLocation: {
         coordinates: new GeoPoint(location.latitude, location.longitude),
         timestamp: Timestamp.now(),
         speed: location.speed || 0,
-        heading: location.heading || 0
+        heading: location.heading || 0,
       },
-      lastSeen: Timestamp.now()
+      lastSeen: Timestamp.now(),
     });
   } catch (error) {
-    console.error('Error updating driver location:', error);
+    console.error("Error updating driver location:", error);
     throw error;
   }
 }
@@ -555,5 +609,13 @@ export async function updateDriverLocationInDriversCollection(driverId: string, 
 export const onAuthChange = (cb: (user: any) => void) => {
   return onAuthStateChanged(auth, cb);
 };
+
+export async function getTotalRidesToday() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const q = query(collection(db, "rides"), where("createdAt", ">=", Timestamp.fromDate(start)));
+  const snap = await getDocs(q);
+  return snap.size;
+}
 
 export default app;

@@ -5,12 +5,21 @@ import { cn } from '@/lib/utils';
 
 interface LayoutProps {
   children: ReactNode;
-  role: 'student' | 'driver' | 'admin' | 'dashboard';
+  role: 'student' | 'teacher' | 'driver' | 'admin' | 'dashboard';
 }
 
 const roleConfig = {
   student: {
     title: 'Student Portal',
+    links: [
+      { to: '/student/dashboard', label: 'Dashboard', icon: Home },
+      { to: '/student/request', label: 'Request Ride', icon: MapPin },
+      { to: '/student/rides', label: 'My Rides', icon: Bus },
+      { to: '/student/profile', label: 'Profile', icon: User }
+    ]
+  },
+  teacher: {
+    title: 'Teacher Portal',
     links: [
       { to: '/student/dashboard', label: 'Dashboard', icon: Home },
       { to: '/student/request', label: 'Request Ride', icon: MapPin },

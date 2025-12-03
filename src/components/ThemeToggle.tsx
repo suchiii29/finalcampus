@@ -1,19 +1,20 @@
+// src/components/ThemeToggle.tsx
 import { Moon, Sun } from "lucide-react";
-import { useTheme } from "@/components/theme-provider";
+import { useTheme } from "./ThemeProvider";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="p-2 rounded-lg border bg-card hover:bg-accent transition"
-      title="Toggle Theme"
+      onClick={toggleTheme}
+      className="fixed top-6 right-6 p-2 rounded-full bg-secondary hover:bg-accent transition-colors"
+      aria-label="Toggle theme"
     >
-      {theme === "dark" ? (
-        <Sun className="w-5 h-5" />
+      {theme === "light" ? (
+        <Moon className="h-5 w-5 text-foreground" />
       ) : (
-        <Moon className="w-5 h-5" />
+        <Sun className="h-5 w-5 text-foreground" />
       )}
     </button>
   );

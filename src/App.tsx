@@ -1,6 +1,7 @@
 // src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 // Main page (portals)
 import Index from "./pages/Index";
@@ -23,16 +24,16 @@ import DriverLocation from "./pages/driver/Location";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
-import AdminHeatmap from "./pages/admin/Heatmap";          // ⭐ ADD
-import AdminVehicles from "./pages/admin/Vehicles";        // ⭐ ADD
-import AdminReports from "./pages/admin/Reports";          // ⭐ ADD
+import AdminHeatmap from "./pages/admin/Heatmap";
+import AdminVehicles from "./pages/admin/Vehicles";
+import AdminReports from "./pages/admin/Reports";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminSetup from './pages/AdminSetup';
 
 function App() {
   return (
-    <>
+    <ThemeProvider defaultTheme="light">
       <Routes>
 
         {/* Public homepage */}
@@ -44,11 +45,11 @@ function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin-setup" element={<AdminSetup />} />
 
-        {/* Student protected routes */}
+        {/* Student & Teacher protected routes (shared portal) - ✅ UPDATED */}
         <Route
           path="/student/dashboard"
           element={
-            <ProtectedRoute requiredRole="STUDENT">
+            <ProtectedRoute requiredRole={["STUDENT", "TEACHER"]}>
               <StudentDashboard />
             </ProtectedRoute>
           }
@@ -57,7 +58,7 @@ function App() {
         <Route
           path="/student/request"
           element={
-            <ProtectedRoute requiredRole="STUDENT">
+            <ProtectedRoute requiredRole={["STUDENT", "TEACHER"]}>
               <RequestRide />
             </ProtectedRoute>
           }
@@ -66,7 +67,7 @@ function App() {
         <Route
           path="/student/rides"
           element={
-            <ProtectedRoute requiredRole="STUDENT">
+            <ProtectedRoute requiredRole={["STUDENT", "TEACHER"]}>
               <StudentRides />
             </ProtectedRoute>
           }
@@ -75,7 +76,7 @@ function App() {
         <Route
           path="/student/profile"
           element={
-            <ProtectedRoute requiredRole="STUDENT">
+            <ProtectedRoute requiredRole={["STUDENT", "TEACHER"]}>
               <StudentProfile />
             </ProtectedRoute>
           }
@@ -84,7 +85,7 @@ function App() {
         <Route
           path="/student/track/:rideId"
           element={
-            <ProtectedRoute requiredRole="STUDENT">
+            <ProtectedRoute requiredRole={["STUDENT", "TEACHER"]}>
               <TrackRide />
             </ProtectedRoute>
           }
@@ -154,7 +155,7 @@ function App() {
       </Routes>
 
       <Toaster />
-    </>
+    </ThemeProvider>
   );
 }
 

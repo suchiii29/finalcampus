@@ -6,11 +6,12 @@ import StatCard from '@/components/StatCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Clock, MapPin, Bus, Calendar, Navigation } from 'lucide-react';
-import { auth, subscribeToStudentRides, getUserProfile } from '../../firebase';
+import { auth, subscribeToStudentRides, getUserProfile, getUserRole } from '../../firebase';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('Student');
+  const [userRole, setUserRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
   const [rides, setRides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,6 +23,12 @@ export default function StudentDashboard() {
       }
 
       try {
+        // Get user role
+        const role = await getUserRole(user.uid);
+        if (role === 'STUDENT' || role === 'TEACHER') {
+          setUserRole(role);
+        }
+
         // Get user profile
         const profile = await getUserProfile(user.uid);
         if (profile && profile.name) {
@@ -68,7 +75,7 @@ export default function StudentDashboard() {
 
   if (loading) {
     return (
-      <Layout role="student">
+      <Layout role={userRole.toLowerCase() as 'student' | 'teacher'}>
         <div className="flex items-center justify-center h-96">
           <p className="text-muted-foreground">Loading...</p>
         </div>
@@ -77,7 +84,7 @@ export default function StudentDashboard() {
   }
 
   return (
-    <Layout role="student">
+    <Layout role={userRole.toLowerCase() as 'student' | 'teacher'}>
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold mb-2">Welcome back, {userName}! 👋</h2>

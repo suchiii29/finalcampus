@@ -1,37 +1,30 @@
 import { Link } from 'react-router-dom';
-import { Bus, User, UserCog, BarChart } from 'lucide-react';
+import { Bus, User, UserCog } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';   // <-- Added import
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const Index = () => {
   const portals = [
     {
-      title: 'Student Portal',
+      title: 'Student & Staff Portal',
       description: 'Book rides, track buses, and manage your commute',
       icon: User,
-      path: '/student/login',   // 🔥 FIXED
+      path: '/student/login',
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     },
     {
       title: 'Driver Portal',
       description: 'Manage rides, update location, and view assignments',
       icon: UserCog,
-      path: '/driver/login',    // 🔥 FIXED
+      path: '/driver/login',
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     },
     {
       title: 'Admin Portal',
       description: 'Manage fleet, assign drivers, and view analytics',
       icon: Bus,
-      path: '/admin/login',     // 🔥 FIXED
-      color: 'bg-primary/10 text-foreground hover:bg-primary/20'
-    },
-    {
-      title: 'Live Dashboard',
-      description: 'Real-time fleet tracking and demand predictions',
-      icon: BarChart,
-      path: '/dashboard/live',
+      path: '/admin/login',
       color: 'bg-primary/10 text-foreground hover:bg-primary/20'
     }
   ];
@@ -62,7 +55,7 @@ const Index = () => {
         </div>
 
         {/* Portal Cards */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {portals.map((portal, index) => {
             const Icon = portal.icon;
             return (
