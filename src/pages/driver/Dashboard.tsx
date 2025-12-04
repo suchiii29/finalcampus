@@ -96,7 +96,6 @@ export default function DriverDashboard() {
     };
 
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const todaysCompleted = allRides.filter((r) => r.status === "completed").length;
@@ -210,11 +209,11 @@ export default function DriverDashboard() {
 
               <div className="flex gap-3 pt-4 border-t">
                 <Button variant="outline" className="flex-1" onClick={handleCancel}>
-                  <XCircle className="h-4 w-4" /> Cancel
+                  <XCircle className="h-4 w-4 mr-2" /> Cancel
                 </Button>
 
                 <Button className="flex-1" onClick={handleStartRide}>
-                  <CheckCircle className="h-4 w-4" /> Start Ride
+                  <CheckCircle className="h-4 w-4 mr-2" /> Start Ride
                 </Button>
               </div>
             </div>

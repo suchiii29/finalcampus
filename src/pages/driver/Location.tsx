@@ -17,6 +17,7 @@ import {
   auth,
   getDriverRides,
   updateDriverLocation,
+  updateDriverLocationInDriversCollection,
 } from "../../firebase";
 
 import { useDriverTrackingStore } from "@/store/driverTrackingStore";
@@ -32,7 +33,16 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-// Ensures correct map resize
+// Auto center map
+function RecenterMap({ center }: { center: [number, number] }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom(), { animate: true, duration: 1 });
+  }, [center, map]);
+  return null;
+}
+
+// Fix map resize
 function ForceResize() {
   const map = useMap();
   useEffect(() => {
@@ -44,13 +54,10 @@ function ForceResize() {
 export default function DriverLocation() {
   const [location, setLocation] = useState<[number, number] | null>(null);
   const [currentRide, setCurrentRide] = useState<any | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const {
-    isTracking,
-    watcherId,
-    setTracking,
-    setWatcherId,
-  } = useDriverTrackingStore();
+  const { isTracking, watcherId, setTracking, setWatcherId } =
+    useDriverTrackingStore();
 
   // Load active ride
   useEffect(() => {
@@ -58,21 +65,21 @@ export default function DriverLocation() {
       const user = auth.currentUser;
       if (!user) return;
 
-      const rides = await getDriverRides(user.uid);
-      const active =
-        rides.find((r: any) => r.status === "in-progress") ||
-        rides.find((r: any) => r.status === "accepted") ||
-        null;
+      try {
+        const rides = await getDriverRides(user.uid);
+        const active =
+          rides.find((r: any) => r.status === "in-progress") ||
+          rides.find((r: any) => r.status === "accepted") ||
+          null;
 
-      setCurrentRide(active);
+        setCurrentRide(active);
 
-      // Restore previous map location
-      const dl = active?.driverLocation as
-        | { lat: number; lng: number }
-        | undefined;
-
-      if (dl && typeof dl.lat === "number" && typeof dl.lng === "number") {
-        setLocation([dl.lat, dl.lng]);
+        const dl = active?.driverLocation;
+        if (dl?.lat && dl?.lng) {
+          setLocation([dl.lat, dl.lng]);
+        }
+      } catch (e) {
+        console.error("Error loading rides:", e);
       }
     };
 
@@ -82,10 +89,11 @@ export default function DriverLocation() {
   // Start GPS tracking
   const startSharing = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation not supported");
+      setError("Geolocation is not supported");
       return;
     }
 
+    setError(null);
     setTracking(true);
 
     const id = navigator.geolocation.watchPosition(
@@ -94,13 +102,35 @@ export default function DriverLocation() {
           pos.coords.latitude,
           pos.coords.longitude,
         ];
+
         setLocation(coords);
 
+        // ================ 🔥 MAIN FIX ADDED HERE 🔥 ==================
         if (currentRide) {
-          await updateDriverLocation(currentRide.id, coords[0], coords[1]);
+          try {
+            // 1️⃣ Update ride (for student dashboard)
+            await updateDriverLocation(currentRide.id, coords[0], coords[1]);
+
+            // 2️⃣ Update drivers collection (for admin & tracking consistency)
+            await updateDriverLocationInDriversCollection(auth.currentUser!.uid, {
+              latitude: coords[0],
+              longitude: coords[1],
+              timestamp: new Date(),
+              speed: pos.coords.speed || 0,
+              heading: pos.coords.heading || 0,
+            });
+          } catch (err) {
+            console.error("Failed to update Firebase location:", err);
+          }
         }
+        // =============================================================
       },
-      (err) => alert(err.message),
+
+      (err) => {
+        console.error("Geolocation error:", err);
+        setError(`Location error: ${err.message}`);
+        setTracking(false);
+      },
       {
         enableHighAccuracy: true,
         timeout: 10000,
@@ -113,12 +143,20 @@ export default function DriverLocation() {
 
   // Stop tracking
   const stopSharing = () => {
-    if (watcherId) {
-      navigator.geolocation.clearWatch(watcherId);
-    }
+    if (watcherId !== null) navigator.geolocation.clearWatch(watcherId);
     setWatcherId(null);
     setTracking(false);
+    setError(null);
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (watcherId !== null) {
+        navigator.geolocation.clearWatch(watcherId);
+      }
+    };
+  }, [watcherId]);
 
   return (
     <Layout role="driver">
@@ -127,7 +165,9 @@ export default function DriverLocation() {
           <div>
             <h2 className="text-3xl font-bold mb-2">Live Location</h2>
             <p className="text-muted-foreground">
-              GPS sharing with students & admin
+              {isTracking
+                ? "Sharing location… students & admin can track you"
+                : "Start sharing to enable tracking"}
             </p>
           </div>
 
@@ -141,6 +181,20 @@ export default function DriverLocation() {
           </Button>
         </div>
 
+        {error && (
+          <Card className="p-4 bg-destructive/10 border-destructive/20">
+            <p className="text-sm text-destructive">{error}</p>
+          </Card>
+        )}
+
+        {!currentRide && (
+          <Card className="p-4 bg-yellow-100 border-yellow-300">
+            <p className="text-sm text-yellow-800">
+              ⚠️ No active ride assigned yet.
+            </p>
+          </Card>
+        )}
+
         <Card className="p-6">
           {location ? (
             <div className="h-[450px] rounded-lg overflow-hidden">
@@ -150,23 +204,57 @@ export default function DriverLocation() {
                 style={{ height: "100%", width: "100%" }}
               >
                 <ForceResize />
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <RecenterMap center={location} />
+
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
 
                 <Marker position={location}>
-                  <Popup>Your Live Location</Popup>
+                  <Popup>
+                    <strong>Your Current Location</strong>
+                    <br />
+                    {isTracking && (
+                      <span className="text-green-600">● Tracking Live</span>
+                    )}
+                  </Popup>
                 </Marker>
 
-                <Circle center={location} radius={20} />
+                <Circle
+                  center={location}
+                  radius={20}
+                  pathOptions={{
+                    color: "#3b82f6",
+                    fillColor: "#3b82f6",
+                    fillOpacity: 0.2,
+                  }}
+                />
               </MapContainer>
             </div>
           ) : (
-            <div className="h-[200px] flex items-center justify-center">
+            <div className="h-[200px] flex flex-col items-center justify-center">
+              <Navigation className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">
-                Click <b>Start Sharing</b> to begin.
+                Click <strong>Start Sharing</strong> to enable live tracking
               </p>
             </div>
           )}
         </Card>
+
+        {location && isTracking && (
+          <Card className="p-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Latitude</p>
+                <p className="font-mono">{location[0].toFixed(6)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Longitude</p>
+                <p className="font-mono">{location[1].toFixed(6)}</p>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
     </Layout>
   );

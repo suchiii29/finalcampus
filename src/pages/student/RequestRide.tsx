@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { MapPin, Clock, Bus, Car, AlertCircle } from 'lucide-react';
+import { Bus, Car, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, createRideRequest, getUserProfile } from '../../firebase';
 
@@ -23,7 +23,7 @@ export default function RequestRide() {
     time: 'now',
     scheduledDateTime: '',
     type: 'bus',
-    priority: 'normal' // 🔥 NEW FIELD
+    priority: 'normal'
   });
 
   useEffect(() => {
@@ -67,9 +67,6 @@ export default function RequestRide() {
       return;
     }
 
-    // --------------------------------------------
-    // 🔥 PRIORITY SCORE LOGIC (simple but effective)
-    // --------------------------------------------
     const priorityWeights: any = {
       emergency: 100,
       exam: 60,
@@ -92,10 +89,9 @@ export default function RequestRide() {
 
       vehicleType: formData.type,
 
-      // 🔥 NEW ML Metadata
       priority: formData.priority,
       priorityScore,
-      zone: formData.pickup, // TEMP: ML clustering will replace this later
+      zone: formData.pickup
     };
 
     try {
@@ -142,7 +138,9 @@ export default function RequestRide() {
               <select
                 value={formData.pickup}
                 onChange={(e) => setFormData({ ...formData, pickup: e.target.value })}
-                className="w-full px-3 py-2 border rounded"
+                className="w-full px-3 py-2 border rounded 
+                           bg-white text-black 
+                           dark:bg-gray-800 dark:text-white dark:border-gray-700"
               >
                 <option value="">Select pickup</option>
                 {locations.map((loc) => <option key={loc}>{loc}</option>)}
@@ -155,14 +153,16 @@ export default function RequestRide() {
               <select
                 value={formData.destination}
                 onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                className="w-full px-3 py-2 border rounded"
+                className="w-full px-3 py-2 border rounded 
+                           bg-white text-black 
+                           dark:bg-gray-800 dark:text-white dark:border-gray-700"
               >
                 <option value="">Select destination</option>
                 {locations.map((loc) => <option key={loc}>{loc}</option>)}
               </select>
             </div>
 
-            {/* Priority Selection */}
+            {/* Priority */}
             <div className="space-y-2">
               <Label className="flex gap-2 items-center">
                 <AlertCircle className="h-4 w-4 text-red-500" />
@@ -217,19 +217,23 @@ export default function RequestRide() {
                   type="datetime-local"
                   value={formData.scheduledDateTime}
                   onChange={(e) => setFormData({ ...formData, scheduledDateTime: e.target.value })}
-                  className="mt-2"
+                  className="mt-2 
+                             bg-white text-black 
+                             dark:bg-gray-800 dark:text-white dark:border-gray-700"
                 />
               )}
             </div>
 
-            {/* Ride Type */}
+            {/* Vehicle Type */}
             <div className="space-y-2">
               <Label>Vehicle Type</Label>
               <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, type: 'bus' })}
-                  className={`p-4 border rounded ${formData.type === 'bus' ? 'border-primary bg-primary/10' : ''}`}
+                  className={`p-4 border rounded 
+                    ${formData.type === 'bus' ? 'border-primary bg-primary/10' : ''}
+                    dark:bg-gray-800 dark:text-white dark:border-gray-600`}
                 >
                   <Bus className="h-6 w-6 mx-auto mb-1" />
                   Bus
@@ -238,7 +242,9 @@ export default function RequestRide() {
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, type: 'cab' })}
-                  className={`p-4 border rounded ${formData.type === 'cab' ? 'border-primary bg-primary/10' : ''}`}
+                  className={`p-4 border rounded 
+                    ${formData.type === 'cab' ? 'border-primary bg-primary/10' : ''}
+                    dark:bg-gray-800 dark:text-white dark:border-gray-600`}
                 >
                   <Car className="h-6 w-6 mx-auto mb-1" />
                   Cab
