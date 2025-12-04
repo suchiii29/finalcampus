@@ -532,6 +532,16 @@ export async function updateDemandZone(zoneData: Omit<DemandZone, "timestamp">) 
     throw error;
   }
 }
+// Get all driver live locations from the "drivers" collection
+export async function getAllDriverLocations() {
+  const driversRef = collection(db, "drivers");
+  const snap = await getDocs(driversRef);
+
+  return snap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+}
 
 export async function getZoneDemandHistory(zone: string, hours: number = 24) {
   const startTime = new Date();
@@ -584,16 +594,30 @@ export async function createDriverDocument(uid: string, profile: any) {
   );
 }
 
-export async function updateDriverLocationInDriversCollection(driverId: string, location: Location) {
+export async function updateDriverLocationInDriversCollection(
+  driverId: string,
+  location: {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    heading?: number;
+  }
+) {
   try {
     const driverRef = doc(db, "drivers", driverId);
+
     await updateDoc(driverRef, {
+      status: "active", // mark driver active when tracking
       currentLocation: {
-        coordinates: new GeoPoint(location.latitude, location.longitude),
+        coordinates: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+        speed: location.speed ?? 0,
+        heading: location.heading ?? 0,
         timestamp: Timestamp.now(),
-        speed: location.speed || 0,
-        heading: location.heading || 0,
       },
+      updatedAt: Timestamp.now(),
       lastSeen: Timestamp.now(),
     });
   } catch (error) {
@@ -601,6 +625,7 @@ export async function updateDriverLocationInDriversCollection(driverId: string, 
     throw error;
   }
 }
+
 
 /* ============================
    Misc

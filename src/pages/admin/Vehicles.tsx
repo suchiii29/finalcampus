@@ -1,67 +1,142 @@
 // src/pages/admin/Vehicles.tsx
-import { useEffect, useState } from 'react';
-import Layout from '@/components/Layout';
-import { Card } from '@/components/ui/card';
-import { subscribeToActiveDrivers } from '@/firebase';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { Bus, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from "react";
+import Layout from "@/components/Layout";
+import { Card } from "@/components/ui/card";
+import { subscribeToActiveDrivers } from "@/firebase";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-// Fix Leaflet icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+// =====================================
+// ⭐ 1. PARSE STRING COORDINATES
+// Example: "13.135° N, 77.566° E"
+// =====================================
+function parseCoordinateString(coordString: string) {
+  try {
+    const regex = /([\d.]+)°\s*([NS]),\s*([\d.]+)°\s*([EW])/;
+    const match = coordString.match(regex);
 
+    if (!match) return null;
+
+    let lat = parseFloat(match[1]);
+    let latDir = match[2];
+    let lng = parseFloat(match[3]);
+    let lngDir = match[4];
+
+    if (latDir === "S") lat = -lat;
+    if (lngDir === "W") lng = -lng;
+
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
+// =====================================
+// ⭐ 2. EXTRACT COORDINATES FROM DRIVER DOC
+// Supports both STRINGS + GeoPoint
+// =====================================
+const extractCoords = (drv: any) => {
+  const loc = drv?.currentLocation;
+  if (!loc) return null;
+
+  // CASE 1: string "13.12° N, 77.56° E"
+  if (typeof loc.coordinates === "string") {
+    return parseCoordinateString(loc.coordinates);
+  }
+
+  // CASE 2: Firestore GeoPoint
+  if (loc.coordinates?.latitude && loc.coordinates?.longitude) {
+    return {
+      lat: loc.coordinates.latitude,
+      lng: loc.coordinates.longitude,
+    };
+  }
+
+  return null;
+};
+
+// =====================================
+// ⭐ 3. MAIN VEHICLES COMPONENT
+// =====================================
 export default function AdminVehicles() {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   useEffect(() => {
     const unsub = subscribeToActiveDrivers((d) => {
       setDrivers(d || []);
       setLoading(false);
-      setLastUpdate(new Date());
     });
     return () => unsub();
   }, []);
 
-  // ⭐ FIX: Properly extract Firestore GeoPoint
-  const driversWithLocation = drivers.filter((d) => {
-    const coords = d?.currentLocation?.coordinates;
-    return coords && typeof coords.latitude === "number" && typeof coords.longitude === "number";
-  });
+  // ⭐ Attach coords to every driver
+  const driversWithLocation = drivers
+    .map((d) => ({ ...d, coords: extractCoords(d) }))
+    .filter((d) => d.coords !== null);
 
-  // ⭐ FIX: Calculate correct map center
+  // ⭐ Auto map center
   const mapCenter =
     driversWithLocation.length > 0
       ? [
-          driversWithLocation.reduce(
-            (sum, d) => sum + d.currentLocation.coordinates.latitude,
-            0
-          ) / driversWithLocation.length,
-          driversWithLocation.reduce(
-            (sum, d) => sum + d.currentLocation.coordinates.longitude,
-            0
-          ) / driversWithLocation.length,
+          driversWithLocation.reduce((s, d) => s + d.coords.lat, 0) /
+            driversWithLocation.length,
+          driversWithLocation.reduce((s, d) => s + d.coords.lng, 0) /
+            driversWithLocation.length,
         ]
       : [13.133356, 77.56797];
 
   const activeVehicles = drivers.filter((d) => d.status === "active").length;
   const idleVehicles = drivers.filter((d) => d.status === "idle").length;
-  const totalPassengers = drivers.reduce((sum, d) => sum + (d.currentPassengers || 0), 0);
-  const totalCapacity = drivers.reduce((sum, d) => sum + (d.capacity || 0), 0);
 
+  // =====================================
+  // ⭐ 4. COLOR BADGE FOR MARKERS
+  // =====================================
+  const getMarkerColor = (status: string) => {
+    if (status === "active") return "#22c55e"; // green
+    if (status === "idle") return "#facc15"; // yellow
+    return "#ef4444"; // red
+  };
+
+  // =====================================
+  // ⭐ 5. CREATE LABEL MARKER (DivIcon)
+  // =====================================
+  const createVehicleLabelIcon = (vehicleNumber: string, status: string) => {
+    const color = getMarkerColor(status);
+
+    const html = `
+      <div style="
+        background: ${color};
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid black;
+        font-size: 12px;
+        font-weight: bold;
+        color: black;
+        white-space: nowrap;
+        box-shadow: 0px 0px 3px rgba(0,0,0,0.4);
+      ">
+        🚌 ${vehicleNumber}
+      </div>
+    `;
+
+    return L.divIcon({
+      html,
+      iconSize: [80, 24],
+      className: "vehicle-label",
+    });
+  };
+
+  // =====================================
+  // ⭐ UI START
+  // =====================================
   return (
     <Layout role="admin">
       <div className="space-y-6">
 
-        {/* TOP CARDS UNTOUCHED */}
-        <div className="grid md:grid-cols-4 gap-4">
+        {/* TOP STATS */}
+        <div className="grid md:grid-cols-3 gap-4">
           <Card className="p-4">
             <p className="text-sm text-muted-foreground">Total Vehicles</p>
             <p className="text-2xl font-bold">{drivers.length}</p>
@@ -76,24 +151,18 @@ export default function AdminVehicles() {
             <p className="text-sm text-muted-foreground">Idle</p>
             <p className="text-2xl font-bold text-warning">{idleVehicles}</p>
           </Card>
-
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">Passengers</p>
-            <p className="text-2xl font-bold">{totalPassengers}/{totalCapacity}</p>
-          </Card>
         </div>
 
-        {/* MAP SECTION */}
+        {/* MAP */}
         <Card className="p-4">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold">Live Vehicle Locations</h3>
-            <div className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {driversWithLocation.length} vehicles transmitting
-            </div>
+            </p>
           </div>
 
           <div className="h-[420px] rounded-lg overflow-hidden">
-
             <MapContainer
               center={mapCenter as [number, number]}
               zoom={15}
@@ -101,61 +170,65 @@ export default function AdminVehicles() {
             >
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap contributors"
+                attribution="© OpenStreetMap contributors"
               />
 
-              {/* ⭐ FIXED MARKERS */}
+              {/* ⭐ MARKERS WITH COLOR + LABELS */}
               {driversWithLocation.map((drv) => (
                 <Marker
                   key={drv.id}
-                  position={[
-                    drv.currentLocation.coordinates.latitude,
-                    drv.currentLocation.coordinates.longitude,
-                  ]}
+                  icon={createVehicleLabelIcon(drv.vehicleNumber, drv.status)}
+                  position={[drv.coords.lat, drv.coords.lng]}
                 >
                   <Popup>
-                    <div>
+                    <div className="space-y-1">
                       <div className="font-bold">{drv.vehicleNumber}</div>
                       <div className="text-sm">{drv.name}</div>
-                      <div className="text-xs">
-                        Passengers: {drv.currentPassengers}/{drv.capacity}
-                      </div>
                       <div className="text-xs">Status: {drv.status}</div>
+                      <div className="text-xs">
+                        Lat: {drv.coords.lat.toFixed(4)}
+                        <br />
+                        Lng: {drv.coords.lng.toFixed(4)}
+                      </div>
                     </div>
                   </Popup>
                 </Marker>
               ))}
-
             </MapContainer>
           </div>
         </Card>
 
-        {/* BOTTOM LIST — NOT CHANGED */}
+        {/* DRIVER LIST */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {drivers.map((d) => (
-            <Card key={d.id} className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">
-                    {d.vehicleNumber} • {d.name}
+          {drivers.map((d) => {
+            const coords = extractCoords(d);
+            return (
+              <Card key={d.id} className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">
+                      {d.vehicleNumber} • {d.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {d.vehicleType?.toUpperCase()}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {d.vehicleType?.toUpperCase()}
+                  <div className="text-sm text-muted-foreground">
+                    {d.status}
                   </div>
                 </div>
-                <div className="text-sm text-muted-foreground">{d.status}</div>
-              </div>
 
-              {/* ⭐ FIX: show correct coords */}
-              <div className="mt-2 text-xs text-muted-foreground">
-                {d.currentLocation?.coordinates
-                  ? `Lat ${d.currentLocation.coordinates.latitude.toFixed(4)}, Lng ${d.currentLocation.coordinates.longitude.toFixed(4)}`
-                  : "Location not shared"}
-              </div>
-            </Card>
-          ))}
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {coords
+                    ? `Lat ${coords.lat.toFixed(4)}, Lng ${coords.lng.toFixed(
+                        4
+                      )}`
+                    : "Location not shared"}
+                </div>
+              </Card>
+            );
+          })}
         </div>
-
       </div>
     </Layout>
   );

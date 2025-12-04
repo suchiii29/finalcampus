@@ -4,7 +4,7 @@ import Layout from "@/components/Layout";
 import StatCard from "@/components/StatCard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bus, Clock, Route as RouteIcon, TrendingUp, Plus, X } from "lucide-react";
+import { Bus, Clock, Route as RouteIcon, TrendingUp, Plus, X, Navigation, Bell } from "lucide-react";
 import {
   subscribeToActiveDrivers,
   getTotalRidesToday,
@@ -13,6 +13,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/firebase";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, orderBy } from "firebase/firestore";
+import { notifyDriverRouteAssignment } from "@/utils/notificationService";
+import { getOptimizedRoute, type Location } from "@/utils/routingAlgorithm";
 
 interface RouteAssignment {
   id: string;
@@ -25,7 +27,21 @@ interface RouteAssignment {
   vehicleNumber: string;
   status: 'active' | 'inactive';
   createdAt: any;
+  optimizedDistance?: number;
+  estimatedTime?: number;
+  optimizedStops?: string[];
 }
+
+const CAMPUS_LOCATIONS: Record<string, Location> = {
+  "Main Gate": { id: "main_gate", name: "Main Gate", lat: 13.13440, lng: 77.56811 },
+  "Hostel Area": { id: "hostel", name: "Hostel Area", lat: 13.13543, lng: 77.56668 },
+  "Lab Block": { id: "lab", name: "Lab Block", lat: 13.13401, lng: 77.56855 },
+  "Girls Hostel": { id: "girls_hostel", name: "Girls Hostel", lat: 13.10646, lng: 77.57173 },
+  "Library": { id: "library", name: "Library", lat: 13.13380, lng: 77.56750 },
+  "Cafeteria": { id: "cafeteria", name: "Cafeteria", lat: 13.13420, lng: 77.56820 },
+  "Sports Complex": { id: "sports", name: "Sports Complex", lat: 13.13350, lng: 77.56900 },
+  "Admin Block": { id: "admin", name: "Admin Block", lat: 13.13460, lng: 77.56780 },
+};
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -35,6 +51,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [totalRidesToday, setTotalRidesToday] = useState(0);
   const [showRouteForm, setShowRouteForm] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   const [newRoute, setNewRoute] = useState({
     routeName: '',
     startPoint: '',
@@ -51,7 +68,6 @@ export default function AdminDashboard() {
       setLoading(false);
     });
 
-    // Subscribe to routes
     const routesQuery = query(collection(db, 'routes'), orderBy('createdAt', 'desc'));
     const unsubRoutes = onSnapshot(routesQuery, (snapshot) => {
       const routesData = snapshot.docs.map(doc => ({
@@ -70,6 +86,9 @@ export default function AdminDashboard() {
   }, []);
 
   const activeRoutes = routes.filter(r => r.status === 'active').length;
+  const avgWaitTime = routes.length > 0 
+    ? Math.round(routes.reduce((sum, r) => sum + (r.estimatedTime || 15), 0) / routes.length)
+    : 0;
 
   const handleAddStop = () => {
     setNewRoute(prev => ({
@@ -104,26 +123,58 @@ export default function AdminDashboard() {
       return;
     }
 
+    setOptimizing(true);
+
     try {
-      // Create the route
-      await addDoc(collection(db, 'routes'), {
+      const startLoc = CAMPUS_LOCATIONS[newRoute.startPoint];
+      const endLoc = CAMPUS_LOCATIONS[newRoute.endPoint];
+      const stopLocs = newRoute.stops
+        .filter(s => s.trim() !== '')
+        .map(s => CAMPUS_LOCATIONS[s])
+        .filter(Boolean);
+
+      if (!startLoc || !endLoc) {
+        toast({ title: "Invalid locations selected", variant: "destructive" });
+        setOptimizing(false);
+        return;
+      }
+
+      const optimizedRoute = getOptimizedRoute(startLoc, endLoc, stopLocs);
+
+      const routeData = {
         routeName: newRoute.routeName,
         startPoint: newRoute.startPoint,
         endPoint: newRoute.endPoint,
         stops: newRoute.stops.filter(s => s.trim() !== ''),
+        optimizedStops: optimizedRoute.route.map(r => r.name),
         assignedDriverId: selectedDriver.id,
         assignedDriverName: selectedDriver.name,
         vehicleNumber: selectedDriver.vehicleNumber,
         status: 'active',
+        optimizedDistance: parseFloat(optimizedRoute.distance.toFixed(2)),
+        estimatedTime: Math.round(optimizedRoute.time),
         createdAt: new Date()
-      });
+      };
 
-      // Update driver status to active
+      await addDoc(collection(db, 'routes'), routeData);
+
       await updateDoc(doc(db, 'drivers', selectedDriver.id), {
         status: 'active'
       });
 
-      toast({ title: "Route assigned successfully" });
+      await notifyDriverRouteAssignment(
+        selectedDriver.id,
+        newRoute.routeName,
+        newRoute.startPoint,
+        newRoute.endPoint,
+        newRoute.stops.filter(s => s.trim() !== '')
+      );
+
+      toast({ 
+        title: "✅ Route assigned successfully!",
+        description: `Driver notified. Distance: ${optimizedRoute.distance.toFixed(2)}km, Time: ${Math.round(optimizedRoute.time)} mins`
+      });
+      
       setShowRouteForm(false);
       setNewRoute({
         routeName: '',
@@ -135,6 +186,8 @@ export default function AdminDashboard() {
     } catch (e: any) {
       console.error(e);
       toast({ title: "Failed to create route", description: e?.message || String(e), variant: "destructive" });
+    } finally {
+      setOptimizing(false);
     }
   };
 
@@ -144,7 +197,6 @@ export default function AdminDashboard() {
     try {
       await deleteDoc(doc(db, 'routes', routeId));
       
-      // If this was the only active route for the driver, set them back to idle
       if (route) {
         const driverActiveRoutes = routes.filter(
           r => r.assignedDriverId === route.assignedDriverId && 
@@ -176,10 +228,8 @@ export default function AdminDashboard() {
         status: newStatus
       });
       
-      // Update driver status based on their active routes
       if (route) {
         if (newStatus === 'inactive') {
-          // Check if driver has any other active routes
           const driverActiveRoutes = routes.filter(
             r => r.assignedDriverId === route.assignedDriverId && 
                  r.status === 'active' && 
@@ -192,7 +242,6 @@ export default function AdminDashboard() {
             });
           }
         } else {
-          // Route is being activated, set driver to active
           await updateDoc(doc(db, 'drivers', route.assignedDriverId), {
             status: 'active'
           });
@@ -208,10 +257,11 @@ export default function AdminDashboard() {
 
   return (
     <Layout role="admin">
-      <div className="space-y-6">
+      <div className="space-y-6 text-gray-200">
+
         <div>
-          <h2 className="text-3xl font-bold mb-2">Admin Dashboard</h2>
-          <p className="text-muted-foreground">Real-time fleet management and analytics</p>
+          <h2 className="text-3xl font-bold mb-2 text-white">Admin Dashboard</h2>
+          <p className="text-gray-400">Real-time fleet management with ML optimization</p>
         </div>
 
         <div className="grid md:grid-cols-4 gap-4">
@@ -233,8 +283,8 @@ export default function AdminDashboard() {
           />
           <StatCard
             title="Avg Wait Time"
-            value="0 min"
-            description="Current average"
+            value={`${avgWaitTime} min`}
+            description="Optimized routing"
             icon={Clock}
             variant="default"
           />
@@ -247,11 +297,16 @@ export default function AdminDashboard() {
           />
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
-          {/* Route Assignment Section */}
-          <Card className="p-4 col-span-2">
+        <div className="grid md:grid-cols-3 gap-4 text-gray-200">
+
+          {/* ROUTE ASSIGNMENT */}
+          <Card className="p-4 col-span-2 bg-slate-900">
+
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold">Route Assignments</h3>
+              <h3 className="font-bold flex items-center gap-2 text-white">
+                <Navigation className="h-5 w-5 text-primary" />
+                Route Assignments
+              </h3>
               <Button size="sm" onClick={() => setShowRouteForm(!showRouteForm)}>
                 <Plus className="h-4 w-4 mr-1" />
                 Assign Route
@@ -259,14 +314,16 @@ export default function AdminDashboard() {
             </div>
 
             {showRouteForm && (
-              <Card className="p-4 mb-4 bg-muted/50">
-                <h4 className="font-semibold mb-3">Create New Route Assignment</h4>
-                <div className="space-y-3">
+              <Card className="p-4 mb-4 bg-slate-800 border-slate-700">
+                <h4 className="font-semibold mb-3 text-white">Create New Route Assignment</h4>
+
+                <div className="space-y-3 text-gray-200">
+
                   <div>
-                    <label className="text-sm font-medium">Route Name</label>
+                    <label className="text-sm font-medium text-gray-200">Route Name</label>
                     <input
                       type="text"
-                      className="w-full p-2 border rounded mt-1"
+                      className="w-full p-2 border rounded mt-1 bg-slate-800 border-slate-600 text-white placeholder:text-gray-400"
                       placeholder="e.g., Morning Campus Loop"
                       value={newRoute.routeName}
                       onChange={(e) => setNewRoute(prev => ({ ...prev, routeName: e.target.value }))}
@@ -275,42 +332,55 @@ export default function AdminDashboard() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-sm font-medium">Start Point</label>
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded mt-1"
-                        placeholder="Main Gate"
+                      <label className="text-sm font-medium text-gray-200">Start Point</label>
+                      <select
+                        className="w-full p-2 border rounded mt-1 bg-slate-800 text-white border-slate-600"
                         value={newRoute.startPoint}
                         onChange={(e) => setNewRoute(prev => ({ ...prev, startPoint: e.target.value }))}
-                      />
+                      >
+                        <option value="">Select start</option>
+                        {Object.keys(CAMPUS_LOCATIONS).map(loc => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
                     </div>
+
                     <div>
-                      <label className="text-sm font-medium">End Point</label>
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded mt-1"
-                        placeholder="Library"
+                      <label className="text-sm font-medium text-gray-200">End Point</label>
+                      <select
+                        className="w-full p-2 border rounded mt-1 bg-slate-800 text-white border-slate-600"
                         value={newRoute.endPoint}
                         onChange={(e) => setNewRoute(prev => ({ ...prev, endPoint: e.target.value }))}
-                      />
+                      >
+                        <option value="">Select end</option>
+                        {Object.keys(CAMPUS_LOCATIONS).map(loc => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium">Stops (Optional)</label>
+                    <label className="text-sm font-medium text-gray-200">Stops (Optional)</label>
+
                     {newRoute.stops.map((stop, index) => (
                       <div key={index} className="flex gap-2 mt-2">
-                        <input
-                          type="text"
-                          className="flex-1 p-2 border rounded"
-                          placeholder={`Stop ${index + 1}`}
+                        <select
+                          className="flex-1 p-2 border rounded bg-slate-800 text-white border-slate-600"
                           value={stop}
                           onChange={(e) => handleStopChange(index, e.target.value)}
-                        />
+                        >
+                          <option className="text-gray-300" value="">Select stop {index + 1}</option>
+                          {Object.keys(CAMPUS_LOCATIONS).map(loc => (
+                            <option key={loc} value={loc}>{loc}</option>
+                          ))}
+                        </select>
+
                         {newRoute.stops.length > 1 && (
                           <Button
                             size="sm"
                             variant="outline"
+                            className="text-white border-gray-500"
                             onClick={() => handleRemoveStop(index)}
                           >
                             <X className="h-4 w-4" />
@@ -318,10 +388,11 @@ export default function AdminDashboard() {
                         )}
                       </div>
                     ))}
+
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mt-2"
+                      className="mt-2 text-white border-gray-500"
                       onClick={handleAddStop}
                     >
                       <Plus className="h-4 w-4 mr-1" />
@@ -330,9 +401,9 @@ export default function AdminDashboard() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium">Assign Driver</label>
+                    <label className="text-sm font-medium text-gray-200">Assign Driver</label>
                     <select
-                      className="w-full p-2 border rounded mt-1"
+                      className="w-full p-2 border rounded mt-1 bg-slate-800 text-white border-slate-600"
                       value={newRoute.assignedDriverId}
                       onChange={(e) => setNewRoute(prev => ({ ...prev, assignedDriverId: e.target.value }))}
                     >
@@ -346,45 +417,71 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    <Button onClick={handleCreateRoute}>Create Route</Button>
-                    <Button variant="outline" onClick={() => setShowRouteForm(false)}>Cancel</Button>
+                    <Button onClick={handleCreateRoute} disabled={optimizing}>
+                      {optimizing ? (
+                        <>
+                          <Navigation className="h-4 w-4 mr-2 animate-spin" />
+                          Optimizing Route...
+                        </>
+                      ) : (
+                        <>
+                          <Bell className="h-4 w-4 mr-2" />
+                          Create & Notify Driver
+                        </>
+                      )}
+                    </Button>
+
+                    <Button variant="outline" className="text-white border-gray-500" onClick={() => setShowRouteForm(false)}>
+                      Cancel
+                    </Button>
                   </div>
+
                 </div>
               </Card>
             )}
 
             {loading ? (
-              <div className="text-muted-foreground">Loading...</div>
+              <div className="text-gray-400">Loading...</div>
             ) : routes.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-gray-400">
                 <RouteIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>No routes assigned yet</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 text-white">
                 {routes.map((route) => (
-                  <div key={route.id} className="p-3 border rounded">
+                  <div key={route.id} className="p-3 border border-slate-700 rounded bg-slate-800">
                     <div className="flex items-start justify-between">
+                      
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="font-medium">{route.routeName}</div>
+                          <div className="font-medium text-white">{route.routeName}</div>
                           <span className={`text-xs px-2 py-1 rounded-full ${
-                            route.status === 'active' 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-gray-100 text-gray-700'
+                            route.status === 'active'
+                              ? 'bg-green-200 text-green-800'
+                              : 'bg-gray-300 text-gray-700'
                           }`}>
                             {route.status}
                           </span>
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1">
+
+                        <div className="text-sm text-gray-300 mt-1">
                           {route.startPoint} → {route.endPoint}
                         </div>
-                        {route.stops && route.stops.length > 0 && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Stops: {route.stops.join(', ')}
+
+                        {route.optimizedDistance && (
+                          <div className="text-xs text-primary font-medium mt-1">
+                            🎯 Optimized: {route.optimizedDistance}km • ~{route.estimatedTime} mins
                           </div>
                         )}
-                        <div className="text-sm mt-2">
+
+                        {route.stops && route.stops.length > 0 && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            Stops: {route.stops.join(", ")}
+                          </div>
+                        )}
+
+                        <div className="text-sm mt-2 text-gray-200">
                           <strong>Driver:</strong> {route.assignedDriverName} ({route.vehicleNumber})
                         </div>
                       </div>
@@ -393,10 +490,12 @@ export default function AdminDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="text-white border-gray-500"
                           onClick={() => handleToggleRouteStatus(route.id, route.status)}
                         >
-                          {route.status === 'active' ? 'Deactivate' : 'Activate'}
+                          {route.status === 'active' ? "Deactivate" : "Activate"}
                         </Button>
+
                         <Button
                           size="sm"
                           variant="destructive"
@@ -405,29 +504,39 @@ export default function AdminDashboard() {
                           Delete
                         </Button>
                       </div>
+
                     </div>
                   </div>
                 ))}
               </div>
             )}
+
           </Card>
 
-          {/* Driver Summary Section */}
-          <Card className="p-4">
-            <h3 className="font-bold mb-3">Driver Summary</h3>
-            <div className="text-sm text-muted-foreground mb-2">Total drivers: {drivers.length}</div>
+          {/* DRIVER SUMMARY */}
+          <Card className="p-4 bg-slate-900 text-gray-200">
+            <h3 className="font-bold mb-3 text-white">Driver Summary</h3>
+            <div className="text-sm text-gray-400 mb-2">Total drivers: {drivers.length}</div>
+
             <div className="space-y-2">
               {drivers.slice(0, 8).map(d => (
                 <div key={d.id} className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium">{d.name}</div>
-                    <div className="text-xs text-muted-foreground">{d.vehicleNumber}</div>
+                    <div className="font-medium text-white">{d.name}</div>
+                    <div className="text-xs text-gray-400">{d.vehicleNumber}</div>
                   </div>
-                  <div className="text-xs text-muted-foreground">{d.status}</div>
+
+                  <div className={`text-xs px-2 py-1 rounded-full ${
+                    d.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-gray-300 text-gray-700'
+                  }`}>
+                    {d.status}
+                  </div>
                 </div>
               ))}
             </div>
+
           </Card>
+
         </div>
       </div>
     </Layout>

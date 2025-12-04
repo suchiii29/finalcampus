@@ -4,7 +4,7 @@ import Layout from "@/components/Layout";
 import StatCard from "@/components/StatCard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MapPin, Clock, CheckCircle, XCircle, Users, Route } from "lucide-react";
+import { MapPin, Clock, CheckCircle, XCircle, Users, Route, Bell, BellRing } from "lucide-react";
 
 import {
   getDriverRides,
@@ -17,6 +17,7 @@ import { collection, query, where, onSnapshot, orderBy } from "firebase/firestor
 
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { subscribeToNotifications, markAsRead, showBrowserNotification, type Notification } from "@/utils/notificationService";
 
 interface RouteAssignment {
   id: string;
@@ -29,12 +30,17 @@ interface RouteAssignment {
   vehicleNumber: string;
   status: 'active' | 'inactive';
   createdAt: any;
+  optimizedDistance?: number;
+  estimatedTime?: number;
 }
 
 export default function DriverDashboard() {
   const [currentRide, setCurrentRide] = useState<any | null>(null);
   const [allRides, setAllRides] = useState<any[]>([]);
   const [assignedRoutes, setAssignedRoutes] = useState<RouteAssignment[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [driver, setDriver] = useState<any>({
     driverName: "Driver",
     vehicleNumber: "CAM-001",
@@ -87,8 +93,28 @@ export default function DriverDashboard() {
           setAssignedRoutes(routesData);
         });
 
+        // 🔔 Subscribe to notifications
+        const unsubNotifications = subscribeToNotifications(user.uid, (notifs) => {
+          setNotifications(notifs);
+          const unread = notifs.filter(n => !n.read).length;
+          setUnreadCount(unread);
+
+          // Show latest unread notification
+          const latestUnread = notifs.find(n => !n.read);
+          if (latestUnread) {
+            toast({
+              title: latestUnread.title,
+              description: latestUnread.message,
+            });
+
+            // Browser notification
+            showBrowserNotification(latestUnread.title, latestUnread.message);
+          }
+        });
+
         return () => {
           unsubRoutes();
+          unsubNotifications();
         };
       } catch (e) {
         console.error("Error loading driver data", e);
@@ -96,7 +122,7 @@ export default function DriverDashboard() {
     };
 
     loadData();
-  }, []);
+  }, [toast]);
 
   const todaysCompleted = allRides.filter((r) => r.status === "completed").length;
   const activeRoutes = assignedRoutes.filter(r => r.status === 'active');
@@ -131,13 +157,85 @@ export default function DriverDashboard() {
     }
   };
 
+  const handleNotificationClick = async (notif: Notification) => {
+    if (!notif.read && notif.id) {
+      await markAsRead(notif.id);
+    }
+    
+    // Navigate based on notification type
+    if (notif.type === 'route_assigned') {
+      setShowNotifications(false);
+    }
+  };
+
   return (
     <Layout role="driver">
       <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold mb-2">Welcome, {driver.driverName}! 👋</h2>
-          <p className="text-muted-foreground">Vehicle: {driver.vehicleNumber}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold mb-2">Welcome, {driver.driverName}! 👋</h2>
+            <p className="text-muted-foreground">Vehicle: {driver.vehicleNumber}</p>
+          </div>
+
+          {/* Notification Bell */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative"
+          >
+            {unreadCount > 0 ? (
+              <BellRing className="h-5 w-5 text-primary" />
+            ) : (
+              <Bell className="h-5 w-5" />
+            )}
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-destructive text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </Button>
         </div>
+
+        {/* Notifications Panel */}
+        {showNotifications && (
+          <Card className="p-4">
+            <h3 className="font-bold mb-3 flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Notifications
+            </h3>
+            {notifications.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No notifications yet
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className={`p-3 rounded border cursor-pointer transition-colors ${
+                      notif.read ? 'bg-background' : 'bg-primary/5 border-primary/20'
+                    }`}
+                    onClick={() => handleNotificationClick(notif)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{notif.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{notif.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {notif.createdAt?.toDate?.()?.toLocaleTimeString() || 'Just now'}
+                        </p>
+                      </div>
+                      {!notif.read && (
+                        <div className="h-2 w-2 bg-primary rounded-full mt-1" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
         <div className="grid md:grid-cols-3 gap-4">
           <StatCard
@@ -231,6 +329,11 @@ export default function DriverDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <Route className="h-5 w-5 text-primary" />
             <h3 className="text-xl font-bold">Your Assigned Routes</h3>
+            {activeRoutes.length > 0 && (
+              <span className="ml-auto text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+                {activeRoutes.length} Active
+              </span>
+            )}
           </div>
           
           {assignedRoutes.length > 0 ? (
@@ -257,6 +360,12 @@ export default function DriverDashboard() {
                             <MapPin className="h-4 w-4 text-accent" />
                             <span className="font-medium">{route.endPoint}</span>
                           </div>
+
+                          {route.optimizedDistance && (
+                            <div className="text-xs text-primary font-medium bg-white p-2 rounded">
+                              🎯 Optimized Route: {route.optimizedDistance}km • ~{route.estimatedTime} mins
+                            </div>
+                          )}
                           
                           {route.stops && route.stops.length > 0 && (
                             <div className="mt-2 p-2 bg-white rounded border">
@@ -317,6 +426,7 @@ export default function DriverDashboard() {
             <div className="text-center py-8 text-muted-foreground">
               <Route className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No routes assigned by admin yet</p>
+              <p className="text-xs mt-1">You'll receive a notification when a route is assigned</p>
             </div>
           )}
         </Card>

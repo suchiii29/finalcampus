@@ -25,7 +25,6 @@ import DriverLocation from "./pages/driver/Location";
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminHeatmap from "./pages/admin/Heatmap";
-import AdminVehicles from "./pages/admin/Vehicles";
 import AdminReports from "./pages/admin/Reports";
 
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -45,7 +44,7 @@ function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin-setup" element={<AdminSetup />} />
 
-        {/* Student & Teacher protected routes (shared portal) - ✅ UPDATED */}
+        {/* Student & Teacher protected routes */}
         <Route
           path="/student/dashboard"
           element={
@@ -110,10 +109,7 @@ function App() {
           }
         />
 
-        {/* ----------------------------- */}
-        {/* ADMIN protected routes        */}
-        {/* ----------------------------- */}
-
+        {/* ADMIN protected routes */}
         <Route
           path="/admin/dashboard"
           element={
@@ -123,14 +119,7 @@ function App() {
           }
         />
 
-        <Route
-          path="/admin/vehicles"
-          element={
-            <ProtectedRoute requiredRole="ADMIN">
-              <AdminVehicles />
-            </ProtectedRoute>
-          }
-        />
+        {/* ❌ Vehicles route removed here */}
 
         <Route
           path="/admin/heatmap"

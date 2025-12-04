@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// src/pages/driver/DriverLocation.tsx
+import { useEffect, useState, useRef } from "react";
 import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,12 +55,13 @@ function ForceResize() {
 export default function DriverLocation() {
   const [location, setLocation] = useState<[number, number] | null>(null);
   const [currentRide, setCurrentRide] = useState<any | null>(null);
+  const currentRideRef = useRef<any | null>(null); // always latest ride
   const [error, setError] = useState<string | null>(null);
 
   const { isTracking, watcherId, setTracking, setWatcherId } =
     useDriverTrackingStore();
 
-  // Load active ride
+  // Load active ride (if any)
   useEffect(() => {
     const loadRide = async () => {
       const user = auth.currentUser;
@@ -73,6 +75,7 @@ export default function DriverLocation() {
           null;
 
         setCurrentRide(active);
+        currentRideRef.current = active;
 
         const dl = active?.driverLocation;
         if (dl?.lat && dl?.lng) {
@@ -85,6 +88,11 @@ export default function DriverLocation() {
 
     loadRide();
   }, []);
+
+  // keep ref synced
+  useEffect(() => {
+    currentRideRef.current = currentRide;
+  }, [currentRide]);
 
   // Start GPS tracking
   const startSharing = () => {
@@ -105,27 +113,28 @@ export default function DriverLocation() {
 
         setLocation(coords);
 
-        // ================ 🔥 MAIN FIX ADDED HERE 🔥 ==================
-        if (currentRide) {
-          try {
-            // 1️⃣ Update ride (for student dashboard)
-            await updateDriverLocation(currentRide.id, coords[0], coords[1]);
+        const user = auth.currentUser;
+        if (!user) return;
 
-            // 2️⃣ Update drivers collection (for admin & tracking consistency)
-            await updateDriverLocationInDriversCollection(auth.currentUser!.uid, {
-              latitude: coords[0],
-              longitude: coords[1],
-              timestamp: new Date(),
-              speed: pos.coords.speed || 0,
-              heading: pos.coords.heading || 0,
-            });
-          } catch (err) {
-            console.error("Failed to update Firebase location:", err);
+        try {
+          // 1️⃣ ALWAYS update the drivers collection (for admin map)
+          await updateDriverLocationInDriversCollection(user.uid, {
+            latitude: coords[0],
+            longitude: coords[1],
+            timestamp: new Date(),
+            speed: pos.coords.speed || 0,
+            heading: pos.coords.heading || 0,
+          });
+
+          // 2️⃣ Only update ride if we actually have one
+          const activeRide = currentRideRef.current;
+          if (activeRide) {
+            await updateDriverLocation(activeRide.id, coords[0], coords[1]);
           }
+        } catch (err) {
+          console.error("Failed to update Firebase location:", err);
         }
-        // =============================================================
       },
-
       (err) => {
         console.error("Geolocation error:", err);
         setError(`Location error: ${err.message}`);
@@ -143,20 +152,16 @@ export default function DriverLocation() {
 
   // Stop tracking
   const stopSharing = () => {
-    if (watcherId !== null) navigator.geolocation.clearWatch(watcherId);
+    if (watcherId !== null) {
+      navigator.geolocation.clearWatch(watcherId);
+    }
     setWatcherId(null);
     setTracking(false);
     setError(null);
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (watcherId !== null) {
-        navigator.geolocation.clearWatch(watcherId);
-      }
-    };
-  }, [watcherId]);
+  // IMPORTANT: no cleanup that auto-stops on unmount.
+  // We want tracking to continue until the driver presses Stop.
 
   return (
     <Layout role="driver">
@@ -190,7 +195,8 @@ export default function DriverLocation() {
         {!currentRide && (
           <Card className="p-4 bg-yellow-100 border-yellow-300">
             <p className="text-sm text-yellow-800">
-              ⚠️ No active ride assigned yet.
+              ⚠️ No active ride assigned yet. Location sharing will still update
+              the admin map.
             </p>
           </Card>
         )}
@@ -206,9 +212,7 @@ export default function DriverLocation() {
                 <ForceResize />
                 <RecenterMap center={location} />
 
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
                 <Marker position={location}>
                   <Popup>

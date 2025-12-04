@@ -38,7 +38,10 @@ const roleConfig = {
     title: 'Admin Portal',
     links: [
       { to: '/admin/dashboard', label: 'Dashboard', icon: Home },
-      { to: '/admin/vehicles', label: 'Vehicles', icon: Bus },
+
+      // ❌ Vehicles removed here
+      // { to: '/admin/vehicles', label: 'Vehicles', icon: Bus },
+
       { to: '/admin/heatmap', label: 'Demand Heatmap', icon: Map },
       { to: '/admin/reports', label: 'Reports', icon: BarChart3 }
     ]
