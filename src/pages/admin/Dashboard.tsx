@@ -80,13 +80,13 @@ export default function AdminDashboard() {
     getTotalRidesToday().then(setTotalRidesToday).catch((e) => console.warn(e));
 
     return () => {
-      try { unsubDrivers && unsubDrivers(); } catch {}
-      try { unsubRoutes && unsubRoutes(); } catch {}
+      try { unsubDrivers && unsubDrivers(); } catch { }
+      try { unsubRoutes && unsubRoutes(); } catch { }
     };
   }, []);
 
   const activeRoutes = routes.filter(r => r.status === 'active').length;
-  const avgWaitTime = routes.length > 0 
+  const avgWaitTime = routes.length > 0
     ? Math.round(routes.reduce((sum, r) => sum + (r.estimatedTime || 15), 0) / routes.length)
     : 0;
 
@@ -156,25 +156,33 @@ export default function AdminDashboard() {
         createdAt: new Date()
       };
 
+      // 🔥 Route successfully created (this works fine)
       await addDoc(collection(db, 'routes'), routeData);
 
+      // Update driver status (this also works)
       await updateDoc(doc(db, 'drivers', selectedDriver.id), {
         status: 'active'
       });
 
-      await notifyDriverRouteAssignment(
-        selectedDriver.id,
-        newRoute.routeName,
-        newRoute.startPoint,
-        newRoute.endPoint,
-        newRoute.stops.filter(s => s.trim() !== '')
-      );
+      // 🔥 FIX: notification errors no longer break route creation
+      try {
+        await notifyDriverRouteAssignment(
+          selectedDriver.id,
+          newRoute.routeName,
+          newRoute.startPoint,
+          newRoute.endPoint,
+          newRoute.stops.filter(s => s.trim() !== '')
+        );
+      } catch (notifyErr) {
+        console.warn("Driver notification failed:", notifyErr);
+      }
 
-      toast({ 
+      toast({
         title: "✅ Route assigned successfully!",
-        description: `Driver notified. Distance: ${optimizedRoute.distance.toFixed(2)}km, Time: ${Math.round(optimizedRoute.time)} mins`
+        description: `Driver notified (if online). Distance: ${optimizedRoute.distance.toFixed(2)}km, Time: ${Math.round(optimizedRoute.time)} mins`
       });
-      
+
+      // Reset form
       setShowRouteForm(false);
       setNewRoute({
         routeName: '',
@@ -183,6 +191,7 @@ export default function AdminDashboard() {
         stops: [''],
         assignedDriverId: '',
       });
+
     } catch (e: any) {
       console.error(e);
       toast({ title: "Failed to create route", description: e?.message || String(e), variant: "destructive" });
@@ -191,26 +200,27 @@ export default function AdminDashboard() {
     }
   };
 
+
   const handleDeleteRoute = async (routeId: string) => {
     const route = routes.find(r => r.id === routeId);
-    
+
     try {
       await deleteDoc(doc(db, 'routes', routeId));
-      
+
       if (route) {
         const driverActiveRoutes = routes.filter(
-          r => r.assignedDriverId === route.assignedDriverId && 
-               r.status === 'active' && 
-               r.id !== routeId
+          r => r.assignedDriverId === route.assignedDriverId &&
+            r.status === 'active' &&
+            r.id !== routeId
         );
-        
+
         if (driverActiveRoutes.length === 0) {
           await updateDoc(doc(db, 'drivers', route.assignedDriverId), {
             status: 'idle'
           });
         }
       }
-      
+
       toast({ title: "Route deleted successfully" });
     } catch (e: any) {
       console.error(e);
@@ -220,22 +230,22 @@ export default function AdminDashboard() {
 
   const handleToggleRouteStatus = async (routeId: string, currentStatus: string) => {
     const route = routes.find(r => r.id === routeId);
-    
+
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-      
+
       await updateDoc(doc(db, 'routes', routeId), {
         status: newStatus
       });
-      
+
       if (route) {
         if (newStatus === 'inactive') {
           const driverActiveRoutes = routes.filter(
-            r => r.assignedDriverId === route.assignedDriverId && 
-                 r.status === 'active' && 
-                 r.id !== routeId
+            r => r.assignedDriverId === route.assignedDriverId &&
+              r.status === 'active' &&
+              r.id !== routeId
           );
-          
+
           if (driverActiveRoutes.length === 0) {
             await updateDoc(doc(db, 'drivers', route.assignedDriverId), {
               status: 'idle'
@@ -247,7 +257,7 @@ export default function AdminDashboard() {
           });
         }
       }
-      
+
       toast({ title: `Route ${newStatus === 'active' ? 'activated' : 'deactivated'}` });
     } catch (e: any) {
       console.error(e);
@@ -452,15 +462,14 @@ export default function AdminDashboard() {
                 {routes.map((route) => (
                   <div key={route.id} className="p-3 border border-slate-700 rounded bg-slate-800">
                     <div className="flex items-start justify-between">
-                      
+
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <div className="font-medium text-white">{route.routeName}</div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            route.status === 'active'
+                          <span className={`text-xs px-2 py-1 rounded-full ${route.status === 'active'
                               ? 'bg-green-200 text-green-800'
                               : 'bg-gray-300 text-gray-700'
-                          }`}>
+                            }`}>
                             {route.status}
                           </span>
                         </div>
@@ -526,9 +535,8 @@ export default function AdminDashboard() {
                     <div className="text-xs text-gray-400">{d.vehicleNumber}</div>
                   </div>
 
-                  <div className={`text-xs px-2 py-1 rounded-full ${
-                    d.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-gray-300 text-gray-700'
-                  }`}>
+                  <div className={`text-xs px-2 py-1 rounded-full ${d.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-gray-300 text-gray-700'
+                    }`}>
                     {d.status}
                   </div>
                 </div>

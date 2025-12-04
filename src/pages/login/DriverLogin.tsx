@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   signUpEmail,
   loginEmail,
-  loginGoogle,
   getUserRole,
   setUserRole,
   createUserProfile,
@@ -19,7 +18,7 @@ export default function DriverLogin() {
   const [password, setPassword] = useState("");
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState(""); // ⭐ NEW FIELD
+  const [phone, setPhone] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [vehicleType, setVehicleType] = useState<"bus" | "cab">("bus");
 
@@ -68,22 +67,19 @@ export default function DriverLogin() {
         return;
       }
 
-      // -------------- SIGN UP FLOW ----------------------
+      // SIGNUP
       const user = await signUpEmail(email, password);
-
       await setUserRole(user.uid, "DRIVER");
 
-      // Create user profile (existing)
       await createUserProfile(user.uid, {
         email: user.email,
         name,
-        phone,                                     // ⭐ NEW
+        phone,
         role: "DRIVER",
         vehicleNumber: vehicleNumber.replace(/-/g, "").toUpperCase(),
         vehicleType
       });
 
-      // Create driver doc (NEW)
       await createDriverDocument(user.uid, {
         name,
         phone,
@@ -93,8 +89,6 @@ export default function DriverLogin() {
       });
 
       window.location.href = "/driver/dashboard";
-      // ---------------------------------------------------
-
     } catch (e: any) {
       console.error("Email auth error:", e);
       setErr(e.message || "Authentication error");
@@ -106,7 +100,6 @@ export default function DriverLogin() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       <Card className="w-full max-w-lg p-8 shadow-2xl border-2">
 
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-3">
             <Truck className="h-10 w-10 text-primary" />
@@ -116,17 +109,17 @@ export default function DriverLogin() {
           <p className="text-sm text-muted-foreground">Campus Transport Management System</p>
         </div>
 
-        {/* Mode Toggle */}
         <div className="flex justify-center gap-4 mb-6">
           <button
             onClick={() => {
               setMode("signin");
               setErr(null);
             }}
-            className={`px-6 py-2 rounded-lg font-medium ${mode === "signin"
+            className={`px-6 py-2 rounded-lg font-medium ${
+              mode === "signin"
                 ? "bg-primary text-primary-foreground shadow-md"
                 : "bg-secondary hover:bg-accent"
-              }`}
+            }`}
             type="button"
           >
             Sign In
@@ -137,24 +130,23 @@ export default function DriverLogin() {
               setMode("signup");
               setErr(null);
             }}
-            className={`px-6 py-2 rounded-lg font-medium ${mode === "signup"
+            className={`px-6 py-2 rounded-lg font-medium ${
+              mode === "signup"
                 ? "bg-primary text-primary-foreground shadow-md"
                 : "bg-secondary hover:bg-accent"
-              }`}
+            }`}
             type="button"
           >
             Sign Up
           </button>
         </div>
 
-        {/* Error */}
         {err && (
           <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
             {err}
           </div>
         )}
 
-        {/* SIGN UP EXTRA FIELDS */}
         {mode === "signup" && (
           <>
             <label className="block text-sm mb-2 font-medium">Full Name</label>
@@ -163,17 +155,25 @@ export default function DriverLogin() {
               onChange={(e) => setName(e.target.value)}
               className="w-full p-3 border rounded-lg mb-4 bg-background"
               type="text"
+              name="driver_name"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder="Enter your full name"
               disabled={loading}
             />
 
-            {/* ⭐ NEW PHONE FIELD — UI MATCHES EXISTING STYLE */}
             <label className="block text-sm mb-2 font-medium">Phone Number</label>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full p-3 border rounded-lg mb-4 bg-background"
-              type="text"
+              type="tel"
+              name="driver_phone"
+              autoComplete="off"
+              inputMode="numeric"
+              autoCorrect="off"
+              spellCheck={false}
               maxLength={10}
               placeholder="9876543210"
               disabled={loading}
@@ -183,61 +183,46 @@ export default function DriverLogin() {
             <input
               value={vehicleNumber}
               onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
-              className="w-full p-3 border rounded-lg mb-4 bg-background font-mono"
+              className="w-full p-3 border rounded-lg mb-4 bg-background"
               type="text"
+              name="driver_vehicle_number"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder="KA01AB1234"
               disabled={loading}
             />
-
-            <label className="block text-sm mb-2 font-medium">Vehicle Type</label>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <button
-                onClick={() => setVehicleType("bus")}
-                className={`p-4 rounded-lg border-2 ${vehicleType === "bus"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-primary/50"
-                  }`}
-                type="button"
-              >
-                Bus
-              </button>
-              <button
-                onClick={() => setVehicleType("cab")}
-                className={`p-4 rounded-lg border-2 ${vehicleType === "cab"
-                    ? "border-primary bg-primary/10"
-                    : "border-border hover:border-primary/50"
-                  }`}
-                type="button"
-              >
-                Cab
-              </button>
-            </div>
           </>
         )}
 
-        {/* Email */}
         <label className="block text-sm mb-2 font-medium">Email</label>
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full p-3 border rounded-lg mb-4 bg-background"
           type="email"
+          name="driver_email"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder="driver@bmsit.in"
           disabled={loading}
         />
 
-        {/* Password */}
         <label className="block text-sm mb-2 font-medium">Password</label>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full p-3 border rounded-lg mb-6 bg-background"
           type="password"
+          name="driver_pwd"
+          autoComplete="new-password"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder="••••••••"
           disabled={loading}
         />
 
-        {/* Button */}
         <Button
           onClick={handleEmailAuth}
           disabled={loading}
@@ -248,8 +233,8 @@ export default function DriverLogin() {
               ? "Signing in..."
               : "Creating account..."
             : mode === "signin"
-              ? "Sign In"
-              : "Create Account"}
+            ? "Sign In"
+            : "Create Account"}
         </Button>
 
         <div className="text-xs text-center text-muted-foreground mt-6">

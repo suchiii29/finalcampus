@@ -248,9 +248,18 @@ export const createRideRequest = async (rideData: any) => {
 };
 
 export const getStudentRides = async (studentId: string) => {
-  const q = query(collection(db, "rides"), where("studentId", "==", studentId), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "rides"), where("studentId", "==", studentId));
   const qSnap = await getDocs(q);
-  return qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const rides = qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  
+  // Sort client-side by createdAt (most recent first)
+  rides.sort((a: any, b: any) => {
+    const aTime = a.createdAt?.toMillis?.() || 0;
+    const bTime = b.createdAt?.toMillis?.() || 0;
+    return bTime - aTime;
+  });
+  
+  return rides;
 };
 
 export const getRideById = async (rideId: string) => {
@@ -260,11 +269,19 @@ export const getRideById = async (rideId: string) => {
 };
 
 export const subscribeToStudentRides = (studentId: string, callback: (rides: any[]) => void) => {
-  const q = query(collection(db, "rides"), where("studentId", "==", studentId), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "rides"), where("studentId", "==", studentId));
   const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
       const rides = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      
+      // Sort client-side by createdAt (most recent first)
+      rides.sort((a: any, b: any) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      
       callback(rides);
     },
     (error) => {
@@ -311,17 +328,35 @@ export const cancelRide = async (rideId: string) => {
    ============================ */
 
 export const getPendingRides = async () => {
-  const q = query(collection(db, "rides"), where("status", "==", "pending"), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "rides"), where("status", "==", "pending"));
   const qSnap = await getDocs(q);
-  return qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const rides = qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  
+  // Sort client-side by createdAt (most recent first)
+  rides.sort((a: any, b: any) => {
+    const aTime = a.createdAt?.toMillis?.() || 0;
+    const bTime = b.createdAt?.toMillis?.() || 0;
+    return bTime - aTime;
+  });
+  
+  return rides;
 };
 
 export const getAvailableRides = getPendingRides;
 
 export const getDriverRides = async (driverId: string) => {
-  const q = query(collection(db, "rides"), where("driverId", "==", driverId), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "rides"), where("driverId", "==", driverId));
   const qSnap = await getDocs(q);
-  return qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const rides = qSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  
+  // Sort client-side by createdAt (most recent first)
+  rides.sort((a: any, b: any) => {
+    const aTime = a.createdAt?.toMillis?.() || 0;
+    const bTime = b.createdAt?.toMillis?.() || 0;
+    return bTime - aTime;
+  });
+  
+  return rides;
 };
 
 export const assignRide = async (rideId: string, driverData: any) => {
@@ -359,6 +394,114 @@ export const updateDriverLocation = async (rideId: string, lat: number, lng: num
     driverLocation: { lat, lng, timestamp: Timestamp.now() },
     updatedAt: Timestamp.now(),
   });
+};
+
+/* ============================
+   ROUTES - NEW FUNCTIONS FOR DRIVER
+   ============================ */
+
+export interface RouteAssignment {
+  id: string;
+  routeName: string;
+  startPoint: string;
+  endPoint: string;
+  stops: string[];
+  assignedDriverId: string;
+  assignedDriverName: string;
+  vehicleNumber: string;
+  status: 'active' | 'inactive';
+  createdAt: any;
+  optimizedDistance?: number;
+  estimatedTime?: number;
+  optimizedStops?: string[];
+}
+
+/**
+ * Get driver routes - one-time fetch
+ */
+export const getDriverRoutes = async (driverId: string): Promise<RouteAssignment[]> => {
+  try {
+    console.log("Fetching routes for driver:", driverId);
+    
+    const routesRef = collection(db, 'routes');
+    const q = query(routesRef, where('assignedDriverId', '==', driverId));
+    
+    const snapshot = await getDocs(q);
+    console.log("Found routes:", snapshot.size);
+    
+    const routes = snapshot.docs.map(doc => {
+      const data = doc.data();
+      console.log("Route data:", { id: doc.id, ...data });
+      return {
+        id: doc.id,
+        ...data
+      } as RouteAssignment;
+    });
+    
+    // Sort by createdAt (most recent first)
+    routes.sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() || 0;
+      const bTime = b.createdAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+    
+    return routes;
+  } catch (error) {
+    console.error("Error fetching driver routes:", error);
+    throw error;
+  }
+};
+
+/**
+ * Subscribe to driver routes - real-time updates
+ */
+export const subscribeToDriverRoutes = (
+  driverId: string, 
+  callback: (routes: RouteAssignment[]) => void
+): (() => void) => {
+  try {
+    console.log("Setting up routes subscription for driver:", driverId);
+    
+    const routesRef = collection(db, 'routes');
+    const q = query(routesRef, where('assignedDriverId', '==', driverId));
+    
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        console.log("Routes snapshot update - found:", snapshot.size, "routes");
+        
+        const routes = snapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log("Route in snapshot:", { id: doc.id, routeName: data.routeName, status: data.status });
+          return {
+            id: doc.id,
+            ...data
+          } as RouteAssignment;
+        });
+        
+        // Sort by createdAt (most recent first)
+        routes.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+        
+        callback(routes);
+      },
+      (error) => {
+        console.error("Error in routes subscription:", error);
+        // Provide more details about the error
+        if (error.code === 'permission-denied') {
+          console.error("Permission denied - check Firestore rules");
+          console.error("Make sure the driver document exists and has proper role");
+        }
+        callback([]);
+      }
+    );
+  } catch (error) {
+    console.error("Error setting up routes subscription:", error);
+    return () => {};
+  }
 };
 
 /* ============================
@@ -532,6 +675,7 @@ export async function updateDemandZone(zoneData: Omit<DemandZone, "timestamp">) 
     throw error;
   }
 }
+
 // Get all driver live locations from the "drivers" collection
 export async function getAllDriverLocations() {
   const driversRef = collection(db, "drivers");
@@ -625,7 +769,6 @@ export async function updateDriverLocationInDriversCollection(
     throw error;
   }
 }
-
 
 /* ============================
    Misc
