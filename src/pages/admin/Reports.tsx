@@ -135,8 +135,8 @@ export default function AdminReports() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold">Ride Reports</h2>
-            <p className="text-gray-300 dark:text-gray-200 mt-1">View, analyze, and export ride data</p>
+            <h2 className="text-3xl font-bold text-foreground">Ride Reports</h2>
+            <p className="text-muted-foreground mt-1">View, analyze, and export ride data</p>
           </div>
           <div className="flex gap-2">
             <Button onClick={loadRides} variant="outline" className="gap-2" disabled={loading}>
@@ -150,12 +150,12 @@ export default function AdminReports() {
         </div>
 
         {/* Important Note */}
-        <Card className="p-4 bg-yellow-50 border-yellow-200">
+        <Card className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-yellow-900">Important Note</p>
-              <p className="text-sm text-yellow-700 mt-1">
+              <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">Important Note</p>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
                 This page shows <strong>student ride requests</strong>, not route assignments.
               </p>
             </div>
@@ -164,34 +164,34 @@ export default function AdminReports() {
 
         {/* Statistics (Only Total + Cancelled) */}
         <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
-          <Card className="p-3">
-            <div className="text-xs opacity-80">Total</div>
-            <div className="text-2xl font-bold">{stats.total}</div>
+          <Card className="p-3 bg-card border-border">
+            <div className="text-xs text-muted-foreground">Total</div>
+            <div className="text-2xl font-bold text-foreground">{stats.total}</div>
           </Card>
 
-          <Card className="p-3">
-            <div className="text-xs opacity-80">Cancelled</div>
+          <Card className="p-3 bg-card border-border">
+            <div className="text-xs text-muted-foreground">Cancelled</div>
             <div className="text-2xl font-bold text-red-500">{stats.cancelled}</div>
           </Card>
         </div>
 
         {/* Filters */}
-        <Card className="p-4">
+        <Card className="p-4 bg-card border-border">
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-300" />
-              <span className="text-sm font-medium text-gray-200">Filters</span>
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">Filters</span>
             </div>
 
             <div className="flex gap-4 flex-wrap">
 
               {/* Date Filter */}
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-300" />
+                <Calendar className="h-4 w-4 text-muted-foreground" />
                 <select 
                   value={dateRange} 
                   onChange={(e) => setDateRange(e.target.value)} 
-                  className="border rounded-md px-3 py-2 text-sm bg-background text-gray-200"
+                  className="border rounded-md px-3 py-2 text-sm bg-background text-foreground border-input"
                 >
                   <option value="1">Last 24 hours</option>
                   <option value="7">Last 7 days</option>
@@ -205,7 +205,7 @@ export default function AdminReports() {
               <select 
                 value={statusFilter} 
                 onChange={(e) => setStatusFilter(e.target.value)} 
-                className="border rounded-md px-3 py-2 text-sm bg-background text-gray-200"
+                className="border rounded-md px-3 py-2 text-sm bg-background text-foreground border-input"
               >
                 <option value="all">All Statuses ({rides.length})</option>
                 <option value="cancelled">Cancelled ({stats.cancelled})</option>
@@ -216,27 +216,27 @@ export default function AdminReports() {
         </Card>
 
         {/* Table */}
-        <Card>
+        <Card className="bg-card border-border">
           <div className="overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="text-gray-400 dark:text-gray-300">Loading rides...</div>
+                <div className="text-muted-foreground">Loading rides...</div>
               </div>
             ) : filteredRides.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="text-gray-400 dark:text-gray-300 mb-2">No rides found</div>
+                <div className="text-muted-foreground mb-2">No rides found</div>
               </div>
             ) : (
               <table className="w-full">
                 <thead className="bg-muted/50 border-b border-border">
-                  <tr className="text-gray-200 dark:text-gray-100">
-                    <th className="px-6 py-3 text-left text-xs font-bold">Ride ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold">Student</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold">Route</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold">Priority</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold">Request Time</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold">Actions</th>
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Ride ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Student</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Route</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Priority</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Request Time</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-foreground">Actions</th>
                   </tr>
                 </thead>
 
@@ -245,24 +245,24 @@ export default function AdminReports() {
                     <tr key={ride.id} className="hover:bg-muted/30 transition-colors">
 
                       {/* Ride ID */}
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-100">
+                      <td className="px-6 py-4 text-sm font-semibold text-foreground">
                         {ride.id}
                       </td>
 
                       {/* Student */}
                       <td className="px-6 py-4">
-                        <div className="text-sm font-semibold text-gray-100">{ride.studentName}</div>
-                        <div className="text-sm text-gray-300 dark:text-gray-200">{ride.studentId}</div>
+                        <div className="text-sm font-semibold text-foreground">{ride.studentName}</div>
+                        <div className="text-sm text-muted-foreground">{ride.studentId}</div>
                       </td>
 
                       {/* Route */}
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-100">{ride.pickup}</div>
-                        <div className="text-sm text-gray-300 dark:text-gray-200">→ {ride.destination}</div>
+                        <div className="text-sm font-medium text-foreground">{ride.pickup}</div>
+                        <div className="text-sm text-muted-foreground">→ {ride.destination}</div>
                       </td>
 
                       {/* Type */}
-                      <td className="px-6 py-4 text-sm capitalize text-gray-100">
+                      <td className="px-6 py-4 text-sm capitalize text-foreground">
                         {ride.type || 'on-demand'}
                       </td>
 
@@ -275,10 +275,10 @@ export default function AdminReports() {
 
                       {/* Request Time */}
                       <td className="px-6 py-4 text-sm">
-                        <div className="text-gray-100">
+                        <div className="text-foreground">
                           {new Date(ride.requestTime).toLocaleDateString()}
                         </div>
-                        <div className="text-gray-300 dark:text-gray-200">
+                        <div className="text-muted-foreground">
                           {new Date(ride.requestTime).toLocaleTimeString()}
                         </div>
                       </td>
@@ -287,7 +287,7 @@ export default function AdminReports() {
                       <td className="px-6 py-4 text-sm">
                         <button
                           onClick={() => setSelectedRide(ride)}
-                          className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                          className="text-primary hover:text-primary/80 flex items-center gap-1 font-medium"
                         >
                           <Eye className="h-4 w-4" />
                           View
@@ -303,10 +303,10 @@ export default function AdminReports() {
           </div>
         </Card>
 
-        {/* Ride Details Modal (unchanged) */}
+        {/* Ride Details Modal */}
         {selectedRide && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-card">
+            <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-card border-border">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-6">
                   <h3 className="text-2xl font-bold text-foreground">Ride Details</h3>
@@ -366,27 +366,27 @@ export default function AdminReports() {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Requested:</span>
-                        <span className="text-sm font-medium">{new Date(selectedRide.requestTime).toLocaleString()}</span>
+                        <span className="text-sm font-medium text-foreground">{new Date(selectedRide.requestTime).toLocaleString()}</span>
                       </div>
 
                       {selectedRide.assignedTime && (
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">Assigned:</span>
-                          <span className="text-sm font-medium">{new Date(selectedRide.assignedTime).toLocaleString()}</span>
+                          <span className="text-sm font-medium text-foreground">{new Date(selectedRide.assignedTime).toLocaleString()}</span>
                         </div>
                       )}
 
                       {selectedRide.pickupTime && (
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">Picked Up:</span>
-                          <span className="text-sm font-medium">{new Date(selectedRide.pickupTime).toLocaleString()}</span>
+                          <span className="text-sm font-medium text-foreground">{new Date(selectedRide.pickupTime).toLocaleString()}</span>
                         </div>
                       )}
 
                       {selectedRide.completedTime && (
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">Completed:</span>
-                          <span className="text-sm font-medium">{new Date(selectedRide.completedTime).toLocaleString()}</span>
+                          <span className="text-sm font-medium text-foreground">{new Date(selectedRide.completedTime).toLocaleString()}</span>
                         </div>
                       )}
                     </div>

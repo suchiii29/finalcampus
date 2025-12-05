@@ -155,10 +155,11 @@ export default function DriverLogin() {
               onChange={(e) => setName(e.target.value)}
               className="w-full p-3 border rounded-lg mb-4 bg-background"
               type="text"
-              name="driver_name"
+              name="driver_name_unique"
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
+              data-form-type="other"
               placeholder="Enter your full name"
               disabled={loading}
             />
@@ -168,12 +169,13 @@ export default function DriverLogin() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full p-3 border rounded-lg mb-4 bg-background"
-              type="tel"
-              name="driver_phone"
+              type="text"
+              name="driver_phone_unique"
               autoComplete="off"
               inputMode="numeric"
               autoCorrect="off"
               spellCheck={false}
+              data-form-type="other"
               maxLength={10}
               placeholder="9876543210"
               disabled={loading}
@@ -185,10 +187,11 @@ export default function DriverLogin() {
               onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
               className="w-full p-3 border rounded-lg mb-4 bg-background"
               type="text"
-              name="driver_vehicle_number"
+              name="driver_vehicle_number_unique"
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
+              data-form-type="other"
               placeholder="KA01AB1234"
               disabled={loading}
             />
@@ -201,10 +204,11 @@ export default function DriverLogin() {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full p-3 border rounded-lg mb-4 bg-background"
           type="email"
-          name="driver_email"
+          name="driver_email_unique"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
+          data-form-type="other"
           placeholder="driver@bmsit.in"
           disabled={loading}
         />
@@ -215,10 +219,11 @@ export default function DriverLogin() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full p-3 border rounded-lg mb-6 bg-background"
           type="password"
-          name="driver_pwd"
+          name="driver_pwd_unique"
           autoComplete="new-password"
           autoCorrect="off"
           spellCheck={false}
+          data-form-type="other"
           placeholder="••••••••"
           disabled={loading}
         />

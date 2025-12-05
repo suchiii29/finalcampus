@@ -34,7 +34,7 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-// Auto center map
+// Auto center map when location updates
 function RecenterMap({ center }: { center: [number, number] }) {
   const map = useMap();
   useEffect(() => {
@@ -143,7 +143,7 @@ export default function DriverLocation() {
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 1000,
+        maximumAge: 0, // Always get fresh location
       }
     );
 
@@ -160,8 +160,8 @@ export default function DriverLocation() {
     setError(null);
   };
 
-  // IMPORTANT: no cleanup that auto-stops on unmount.
-  // We want tracking to continue until the driver presses Stop.
+  // IMPORTANT: Tracking persists until driver manually stops
+  // No automatic cleanup on component unmount
 
   return (
     <Layout role="driver">
@@ -189,15 +189,6 @@ export default function DriverLocation() {
         {error && (
           <Card className="p-4 bg-destructive/10 border-destructive/20">
             <p className="text-sm text-destructive">{error}</p>
-          </Card>
-        )}
-
-        {!currentRide && (
-          <Card className="p-4 bg-yellow-100 border-yellow-300">
-            <p className="text-sm text-yellow-800">
-              ⚠️ No active ride assigned yet. Location sharing will still update
-              the admin map.
-            </p>
           </Card>
         )}
 

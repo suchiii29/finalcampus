@@ -352,20 +352,21 @@ export default function DriverDashboard() {
           </Card>
         )}
 
+        {/* STAT CARDS - Both neutral colors */}
         <div className="grid md:grid-cols-2 gap-4">
           <StatCard
             title="Today's Rides"
             value={String(todaysCompleted)}
             description="Completed successfully"
             icon={CheckCircle}
-            variant="success"
+            variant="default"
           />
           <StatCard
             title="Assigned Routes"
             value={activeRoutes.length}
             description={`${assignedRoutes.length} total routes`}
             icon={Route}
-            variant="warning"
+            variant="default"
           />
         </div>
 

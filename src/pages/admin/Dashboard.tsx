@@ -156,15 +156,12 @@ export default function AdminDashboard() {
         createdAt: new Date()
       };
 
-      // 🔥 Route successfully created (this works fine)
       await addDoc(collection(db, 'routes'), routeData);
 
-      // Update driver status (this also works)
       await updateDoc(doc(db, 'drivers', selectedDriver.id), {
         status: 'active'
       });
 
-      // 🔥 FIX: notification errors no longer break route creation
       try {
         await notifyDriverRouteAssignment(
           selectedDriver.id,
@@ -182,7 +179,6 @@ export default function AdminDashboard() {
         description: `Driver notified (if online). Distance: ${optimizedRoute.distance.toFixed(2)}km, Time: ${Math.round(optimizedRoute.time)} mins`
       });
 
-      // Reset form
       setShowRouteForm(false);
       setNewRoute({
         routeName: '',
@@ -267,11 +263,11 @@ export default function AdminDashboard() {
 
   return (
     <Layout role="admin">
-      <div className="space-y-6 text-gray-200">
+      <div className="space-y-6">
 
         <div>
-          <h2 className="text-3xl font-bold mb-2 text-white">Admin Dashboard</h2>
-          <p className="text-gray-400">Real-time fleet management with ML optimization</p>
+          <h2 className="text-3xl font-bold mb-2">Admin Dashboard</h2>
+          <p className="text-muted-foreground">Real-time fleet management with ML optimization</p>
         </div>
 
         <div className="grid md:grid-cols-4 gap-4">
@@ -307,13 +303,13 @@ export default function AdminDashboard() {
           />
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4 text-gray-200">
+        <div className="grid md:grid-cols-3 gap-4">
 
           {/* ROUTE ASSIGNMENT */}
-          <Card className="p-4 col-span-2 bg-slate-900">
+          <Card className="p-4 col-span-2 bg-card border-border">
 
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold flex items-center gap-2 text-white">
+              <h3 className="font-bold flex items-center gap-2 text-foreground">
                 <Navigation className="h-5 w-5 text-primary" />
                 Route Assignments
               </h3>
@@ -324,16 +320,16 @@ export default function AdminDashboard() {
             </div>
 
             {showRouteForm && (
-              <Card className="p-4 mb-4 bg-slate-800 border-slate-700">
-                <h4 className="font-semibold mb-3 text-white">Create New Route Assignment</h4>
+              <Card className="p-4 mb-4 bg-muted/50 border-border">
+                <h4 className="font-semibold mb-3 text-foreground">Create New Route Assignment</h4>
 
-                <div className="space-y-3 text-gray-200">
+                <div className="space-y-3">
 
                   <div>
-                    <label className="text-sm font-medium text-gray-200">Route Name</label>
+                    <label className="text-sm font-medium text-foreground">Route Name</label>
                     <input
                       type="text"
-                      className="w-full p-2 border rounded mt-1 bg-slate-800 border-slate-600 text-white placeholder:text-gray-400"
+                      className="w-full p-2 border rounded mt-1 bg-background border-input text-foreground placeholder:text-muted-foreground"
                       placeholder="e.g., Morning Campus Loop"
                       value={newRoute.routeName}
                       onChange={(e) => setNewRoute(prev => ({ ...prev, routeName: e.target.value }))}
@@ -342,9 +338,9 @@ export default function AdminDashboard() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-sm font-medium text-gray-200">Start Point</label>
+                      <label className="text-sm font-medium text-foreground">Start Point</label>
                       <select
-                        className="w-full p-2 border rounded mt-1 bg-slate-800 text-white border-slate-600"
+                        className="w-full p-2 border rounded mt-1 bg-background text-foreground border-input"
                         value={newRoute.startPoint}
                         onChange={(e) => setNewRoute(prev => ({ ...prev, startPoint: e.target.value }))}
                       >
@@ -356,9 +352,9 @@ export default function AdminDashboard() {
                     </div>
 
                     <div>
-                      <label className="text-sm font-medium text-gray-200">End Point</label>
+                      <label className="text-sm font-medium text-foreground">End Point</label>
                       <select
-                        className="w-full p-2 border rounded mt-1 bg-slate-800 text-white border-slate-600"
+                        className="w-full p-2 border rounded mt-1 bg-background text-foreground border-input"
                         value={newRoute.endPoint}
                         onChange={(e) => setNewRoute(prev => ({ ...prev, endPoint: e.target.value }))}
                       >
@@ -371,16 +367,16 @@ export default function AdminDashboard() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-gray-200">Stops (Optional)</label>
+                    <label className="text-sm font-medium text-foreground">Stops (Optional)</label>
 
                     {newRoute.stops.map((stop, index) => (
                       <div key={index} className="flex gap-2 mt-2">
                         <select
-                          className="flex-1 p-2 border rounded bg-slate-800 text-white border-slate-600"
+                          className="flex-1 p-2 border rounded bg-background text-foreground border-input"
                           value={stop}
                           onChange={(e) => handleStopChange(index, e.target.value)}
                         >
-                          <option className="text-gray-300" value="">Select stop {index + 1}</option>
+                          <option value="">Select stop {index + 1}</option>
                           {Object.keys(CAMPUS_LOCATIONS).map(loc => (
                             <option key={loc} value={loc}>{loc}</option>
                           ))}
@@ -390,7 +386,6 @@ export default function AdminDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-white border-gray-500"
                             onClick={() => handleRemoveStop(index)}
                           >
                             <X className="h-4 w-4" />
@@ -402,7 +397,7 @@ export default function AdminDashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mt-2 text-white border-gray-500"
+                      className="mt-2"
                       onClick={handleAddStop}
                     >
                       <Plus className="h-4 w-4 mr-1" />
@@ -411,9 +406,9 @@ export default function AdminDashboard() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-gray-200">Assign Driver</label>
+                    <label className="text-sm font-medium text-foreground">Assign Driver</label>
                     <select
-                      className="w-full p-2 border rounded mt-1 bg-slate-800 text-white border-slate-600"
+                      className="w-full p-2 border rounded mt-1 bg-background text-foreground border-input"
                       value={newRoute.assignedDriverId}
                       onChange={(e) => setNewRoute(prev => ({ ...prev, assignedDriverId: e.target.value }))}
                     >
@@ -441,7 +436,7 @@ export default function AdminDashboard() {
                       )}
                     </Button>
 
-                    <Button variant="outline" className="text-white border-gray-500" onClick={() => setShowRouteForm(false)}>
+                    <Button variant="outline" onClick={() => setShowRouteForm(false)}>
                       Cancel
                     </Button>
                   </div>
@@ -451,30 +446,30 @@ export default function AdminDashboard() {
             )}
 
             {loading ? (
-              <div className="text-gray-400">Loading...</div>
+              <div className="text-muted-foreground">Loading...</div>
             ) : routes.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <RouteIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>No routes assigned yet</p>
               </div>
             ) : (
-              <div className="space-y-3 text-white">
+              <div className="space-y-3">
                 {routes.map((route) => (
-                  <div key={route.id} className="p-3 border border-slate-700 rounded bg-slate-800">
+                  <div key={route.id} className="p-3 border border-border rounded bg-card">
                     <div className="flex items-start justify-between">
 
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="font-medium text-white">{route.routeName}</div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${route.status === 'active'
-                              ? 'bg-green-200 text-green-800'
-                              : 'bg-gray-300 text-gray-700'
+                          <div className="font-medium text-foreground">{route.routeName}</div>
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${route.status === 'active'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400'
                             }`}>
                             {route.status}
                           </span>
                         </div>
 
-                        <div className="text-sm text-gray-300 mt-1">
+                        <div className="text-sm text-muted-foreground mt-1">
                           {route.startPoint} → {route.endPoint}
                         </div>
 
@@ -485,12 +480,12 @@ export default function AdminDashboard() {
                         )}
 
                         {route.stops && route.stops.length > 0 && (
-                          <div className="text-xs text-gray-400 mt-1">
+                          <div className="text-xs text-muted-foreground mt-1">
                             Stops: {route.stops.join(", ")}
                           </div>
                         )}
 
-                        <div className="text-sm mt-2 text-gray-200">
+                        <div className="text-sm mt-2 text-foreground">
                           <strong>Driver:</strong> {route.assignedDriverName} ({route.vehicleNumber})
                         </div>
                       </div>
@@ -499,7 +494,6 @@ export default function AdminDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-white border-gray-500"
                           onClick={() => handleToggleRouteStatus(route.id, route.status)}
                         >
                           {route.status === 'active' ? "Deactivate" : "Activate"}
@@ -523,19 +517,21 @@ export default function AdminDashboard() {
           </Card>
 
           {/* DRIVER SUMMARY */}
-          <Card className="p-4 bg-slate-900 text-gray-200">
-            <h3 className="font-bold mb-3 text-white">Driver Summary</h3>
-            <div className="text-sm text-gray-400 mb-2">Total drivers: {drivers.length}</div>
+          <Card className="p-4 bg-card border-border">
+            <h3 className="font-bold mb-3 text-foreground">Driver Summary</h3>
+            <div className="text-sm text-muted-foreground mb-2">Total drivers: {drivers.length}</div>
 
             <div className="space-y-2">
               {drivers.slice(0, 8).map(d => (
                 <div key={d.id} className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium text-white">{d.name}</div>
-                    <div className="text-xs text-gray-400">{d.vehicleNumber}</div>
+                    <div className="font-medium text-foreground">{d.name}</div>
+                    <div className="text-xs text-muted-foreground">{d.vehicleNumber}</div>
                   </div>
 
-                  <div className={`text-xs px-2 py-1 rounded-full ${d.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-gray-300 text-gray-700'
+                  <div className={`text-xs px-2 py-1 rounded-full font-medium ${d.status === 'active' 
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400'
                     }`}>
                     {d.status}
                   </div>
